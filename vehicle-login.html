@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrackNet — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --asphalt:#000000;
+    --asphalt-2:#0A0A0C;
+    --panel:#131519;
+    --line: rgba(241,238,230,0.08);
+    --ivory:#F1EEE6;
+    --steel:#8992A3;
+    --plate-yellow:#F4C430;
+    --plate-yellow-dim:#D9AE1E;
+    --plate-yellow-glow: rgba(244,196,48,0.55);
+    --taillight:#E5484D;
+    --taillight-glow: rgba(229,72,77,0.5);
+    --signal:#3FB68B;
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--asphalt);
+    color:var(--ivory);
+    font-family:'Inter',sans-serif;
+    display:flex;
+    align-items:stretch;
+    justify-content:center;
+  }
+  .stage{
+    width:100%;
+    max-width:1180px;
+    display:flex;
+    min-height:100vh;
+  }
+
+  /* ---------- LEFT: road panel ---------- */
+  .road{
+    position:relative;
+    flex:1.05;
+    background:
+      linear-gradient(180deg, var(--asphalt-2) 0%, var(--asphalt) 100%);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:56px 52px;
+    border-right:1px solid var(--line);
+  }
+  .lane{
+    position:absolute;
+    top:0; bottom:0; left:50%;
+    width:10px;
+    margin-left:-5px;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--plate-yellow) 0 46px,
+      transparent 46px 92px
+    );
+    opacity:0.85;
+    animation: drive 1.6s linear infinite;
+  }
+  @keyframes drive{
+    from{ background-position-y: 0; }
+    to{ background-position-y: 92px; }
+  }
+  .road-mask{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(120% 90% at 50% 0%, transparent 40%, var(--asphalt) 92%);
+  }
+  .brand{
+    position:relative;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .brand-mark{
+    width:38px;height:38px;border-radius:9px;
+    background:var(--plate-yellow);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--asphalt);
+    font-size:19px;
+  }
+  .brand-name{
+    font-family:'Rajdhani',sans-serif;
+    font-weight:600;
+    font-size:20px;
+    letter-spacing:0.5px;
+  }
+  .hero{ position:relative; z-index:2; max-width:420px; }
+  .hero-eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    letter-spacing:2px;
+    color:var(--plate-yellow);
+    text-transform:uppercase;
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-family:'Rajdhani',sans-serif;
+    font-weight:700;
+    font-size:44px;
+    line-height:1.05;
+    margin:0 0 16px;
+    letter-spacing:0.3px;
+  }
+  .hero p{
+    color:var(--steel);
+    font-size:15px;
+    line-height:1.6;
+    margin:0;
+  }
+  .stat-row{
+    position:relative; z-index:2;
+    display:flex;
+    gap:28px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .stat b{
+    display:block;
+    font-size:22px;
+    color:var(--ivory);
+  }
+  .stat span{
+    font-size:11px;
+    color:var(--steel);
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+
+  /* ---------- RIGHT: form panel ---------- */
+  .panel-wrap{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:40px 32px;
+    background:var(--asphalt);
+  }
+  .card{
+    width:100%;
+    max-width:400px;
+  }
+  .tabs{
+    display:flex;
+    background:var(--panel);
+    border-radius:12px;
+    padding:4px;
+    margin-bottom:28px;
+    border:1px solid var(--line);
+  }
+  .tab-btn{
+    flex:1;
+    padding:11px 0;
+    border:none;
+    background:transparent;
+    color:var(--steel);
+    font-family:'Rajdhani',sans-serif;
+    font-weight:600;
+    font-size:15px;
+    letter-spacing:0.4px;
+    border-radius:9px;
+    cursor:pointer;
+    transform:translateY(0) translateZ(0);
+    transition:background .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease;
+  }
+  .tab-btn.active{
+    background:var(--plate-yellow);
+    color:var(--asphalt);
+    transform:translateY(-2px);
+    box-shadow:0 6px 16px var(--plate-yellow-glow), 0 3px 0 var(--plate-yellow-dim);
+  }
+  .tab-btn:not(.active):hover{
+    color:var(--ivory);
+    transform:translateY(-1px);
+  }
+  .tab-btn:active{ transform:translateY(1px); }
+
+  h2.form-title{
+    font-family:'Rajdhani',sans-serif;
+    font-size:26px;
+    font-weight:700;
+    margin:0 0 6px;
+  }
+  .form-sub{
+    color:var(--steel);
+    font-size:13.5px;
+    margin:0 0 26px;
+  }
+
+  .field{ margin-bottom:18px; position:relative; }
+  .field label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:0.6px;
+    text-transform:uppercase;
+    color:var(--steel);
+    margin-bottom:7px;
+  }
+  .field input{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:13px 14px;
+    color:var(--ivory);
+    font-family:'Inter',sans-serif;
+    font-size:14.5px;
+    outline:none;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .field input::placeholder{ color:#5B6272; }
+  .field input:focus{
+    border-color:var(--plate-yellow);
+    box-shadow:0 0 0 3px rgba(244,196,48,0.15);
+  }
+  .field input.err{ border-color:var(--taillight); }
+
+  .pw-field{ position:relative; }
+  .pw-toggle{
+    position:absolute;
+    right:10px; top:37px;
+    background:none;
+    border:none;
+    color:var(--steel);
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    padding:6px 8px;
+  }
+  .pw-toggle{ transition:color .15s ease, text-shadow .15s ease; }
+  .pw-toggle:hover{ color:var(--plate-yellow); text-shadow:0 0 10px var(--plate-yellow-glow); }
+
+  /* plate input signature element */
+  .plate-field input{
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    letter-spacing:3px;
+    font-size:17px;
+    text-transform:uppercase;
+    color:var(--asphalt);
+    background:var(--plate-yellow);
+    border:2px solid var(--plate-yellow-dim);
+    text-align:center;
+    padding:14px 10px 12px;
+  }
+  .plate-field input::placeholder{
+    color:rgba(20,22,27,0.45);
+    letter-spacing:2px;
+  }
+  .plate-field input:focus{
+    box-shadow:0 0 0 3px rgba(244,196,48,0.3);
+    border-color:var(--asphalt);
+  }
+  .plate-field{
+    position:relative;
+  }
+  .plate-bolt{
+    position:absolute;
+    width:5px;height:5px;border-radius:50%;
+    background:rgba(20,22,27,0.5);
+    top:44px;
+  }
+  .plate-bolt.l{ left:10px; }
+  .plate-bolt.r{ right:10px; }
+
+  .hint{
+    font-size:11.5px;
+    color:var(--steel);
+    margin-top:6px;
+  }
+  .hint.err{ color:var(--taillight); }
+
+  .submit-btn{
+    position:relative;
+    width:100%;
+    padding:15px 0;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(180deg, #FFDE6E 0%, var(--plate-yellow) 55%, var(--plate-yellow-dim) 100%);
+    color:var(--asphalt);
+    font-family:'Rajdhani',sans-serif;
+    font-weight:700;
+    font-size:16px;
+    letter-spacing:0.5px;
+    cursor:pointer;
+    margin-top:6px;
+    transform:perspective(600px) translateY(0) rotateX(0deg) translateZ(0);
+    box-shadow:
+      0 5px 0 var(--plate-yellow-dim),
+      0 8px 18px var(--plate-yellow-glow);
+    transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
+    animation: btnGlow 2.6s ease-in-out infinite;
+  }
+  .submit-btn:hover{
+    transform:perspective(600px) translateY(-4px) rotateX(4deg);
+    box-shadow:
+      0 9px 0 var(--plate-yellow-dim),
+      0 22px 34px var(--plate-yellow-glow);
+  }
+  .submit-btn:active{
+    transform:perspective(600px) translateY(2px) rotateX(0deg);
+    box-shadow:
+      0 2px 0 var(--plate-yellow-dim),
+      0 6px 12px var(--plate-yellow-glow);
+    animation-play-state: paused;
+  }
+  @keyframes btnGlow{
+    0%, 100%{ box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 8px 18px var(--plate-yellow-glow); }
+    50%{ box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 12px 30px rgba(244,196,48,0.85); }
+  }
+
+  .switch-line{
+    text-align:center;
+    margin-top:20px;
+    font-size:13.5px;
+    color:var(--steel);
+  }
+  .switch-line button{
+    background:none;
+    border:none;
+    color:var(--plate-yellow);
+    font-weight:600;
+    cursor:pointer;
+    font-size:13.5px;
+    padding:0;
+  }
+  .switch-line button:hover{ text-decoration:underline; }
+
+  .toast{
+    display:none;
+    align-items:center;
+    gap:8px;
+    padding:11px 14px;
+    border-radius:9px;
+    font-size:13px;
+    margin-bottom:18px;
+    border:1px solid transparent;
+  }
+  .toast.show{ display:flex; }
+  .toast.error{ background:rgba(229,72,77,0.12); border-color:rgba(229,72,77,0.4); color:#FF9A9D; }
+  .toast.success{ background:rgba(63,182,139,0.12); border-color:rgba(63,182,139,0.4); color:#7CE0BB; }
+
+  /* Dashboard (post-login) */
+  .dash{ display:none; }
+  .dash.show{ display:block; }
+  .plate-display{
+    background:var(--plate-yellow);
+    border:2px solid var(--plate-yellow-dim);
+    border-radius:8px;
+    padding:16px 10px;
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;
+    font-weight:700;
+    letter-spacing:4px;
+    font-size:24px;
+    color:var(--asphalt);
+    margin:18px 0 22px;
+  }
+  .dash-row{
+    display:flex;
+    justify-content:space-between;
+    padding:12px 0;
+    border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .dash-row span:first-child{ color:var(--steel); }
+  .logout-btn{
+    width:100%;
+    margin-top:24px;
+    padding:13px 0;
+    border-radius:10px;
+    border:1px solid rgba(229,72,77,0.4);
+    background:rgba(229,72,77,0.08);
+    color:#FF9A9D;
+    font-family:'Rajdhani',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.4px;
+    cursor:pointer;
+    transform:perspective(600px) translateY(0);
+    box-shadow:0 3px 0 rgba(229,72,77,0.25), 0 0 0 rgba(229,72,77,0);
+    transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+  .logout-btn:hover{
+    background:rgba(229,72,77,0.16);
+    transform:perspective(600px) translateY(-3px) rotateX(3deg);
+    box-shadow:0 6px 0 rgba(229,72,77,0.25), 0 16px 28px var(--taillight-glow);
+  }
+  .logout-btn:active{
+    transform:perspective(600px) translateY(1px);
+    box-shadow:0 1px 0 rgba(229,72,77,0.25), 0 4px 10px var(--taillight-glow);
+  }
+
+  /* visually-hidden focus-safe */
+  button:focus-visible, input:focus-visible{
+    outline:2px solid var(--plate-yellow);
+    outline-offset:2px;
+  }
+
+  @media (max-width:900px){
+    .stage{ flex-direction:column; min-height:auto; }
+    .road{ padding:36px 28px; border-right:none; border-bottom:1px solid var(--line); min-height:260px; }
+    .hero h1{ font-size:32px; }
+    .stat-row{ margin-top:24px; }
+    .lane{ display:none; }
+    .panel-wrap{ padding:32px 24px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .lane{ animation:none; }
+    .submit-btn{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- LEFT PANEL -->
+  <div class="road">
+    <div class="lane"></div>
+    <div class="road-mask"></div>
+
+    <div class="brand">
+      <div class="brand-mark">T</div>
+      <div class="brand-name">TrackNet</div>
+    </div>
+
+    <div class="hero">
+      <div class="hero-eyebrow">Vehicle account access</div>
+      <h1>One account.<br>Every vehicle you drive.</h1>
+      <p>Register with your email and license plate to keep your vehicle profile, service history and permits in one place.</p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat"><b>128k+</b><span>Plates registered</span></div>
+      <div class="stat"><b>4.9</b><span>Driver rating</span></div>
+      <div class="stat"><b>24/7</b><span>Garage access</span></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel-wrap">
+    <div class="card">
+
+      <!-- AUTH TABS + FORMS -->
+      <div id="authView">
+        <div class="tabs">
+          <button class="tab-btn active" id="tabLogin" type="button">Sign in</button>
+          <button class="tab-btn" id="tabRegister" type="button">Register</button>
+        </div>
+
+        <div id="toast" class="toast"></div>
+
+        <!-- LOGIN FORM -->
+        <form id="loginForm" novalidate>
+          <h2 class="form-title">Sign in</h2>
+          <p class="form-sub">Access your vehicle profile.</p>
+
+          <div class="field">
+            <label for="loginEmail">Email address</label>
+            <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+            <div class="hint" id="loginEmailHint"></div>
+          </div>
+
+          <div class="field pw-field">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" placeholder="Enter your password" autocomplete="current-password">
+            <button type="button" class="pw-toggle" data-target="loginPassword">SHOW</button>
+            <div class="hint" id="loginPasswordHint"></div>
+          </div>
+
+          <button type="submit" class="submit-btn">Sign in</button>
+
+          <div class="switch-line">
+            No account yet? <button type="button" id="goRegister">Register here</button>
+          </div>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="registerForm" novalidate style="display:none;">
+          <h2 class="form-title">Create account</h2>
+          <p class="form-sub">Link your email and plate to get started.</p>
+
+          <div class="field">
+            <label for="regEmail">Email address</label>
+            <input type="email" id="regEmail" placeholder="you@example.com" autocomplete="email">
+            <div class="hint" id="regEmailHint"></div>
+          </div>
+
+          <div class="field plate-field">
+            <label for="regPlate">Vehicle license plate</label>
+            <input type="text" id="regPlate" placeholder="TN 01 AB 1234" maxlength="12">
+            <span class="plate-bolt l"></span>
+            <span class="plate-bolt r"></span>
+            <div class="hint" id="regPlateHint">4–12 letters/numbers, spaces allowed.</div>
+          </div>
+
+          <div class="field pw-field">
+            <label for="regPassword">Password</label>
+            <input type="password" id="regPassword" placeholder="Minimum 6 characters" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-target="regPassword">SHOW</button>
+            <div class="hint" id="regPasswordHint"></div>
+          </div>
+
+          <div class="field pw-field">
+            <label for="regConfirm">Confirm password</label>
+            <input type="password" id="regConfirm" placeholder="Re-enter password" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-target="regConfirm">SHOW</button>
+            <div class="hint" id="regConfirmHint"></div>
+          </div>
+
+          <button type="submit" class="submit-btn">Create account</button>
+
+          <div class="switch-line">
+            Already registered? <button type="button" id="goLogin">Sign in</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- DASHBOARD (post-login) -->
+      <div id="dash" class="dash">
+        <h2 class="form-title">Welcome back</h2>
+        <p class="form-sub" id="dashEmail">—</p>
+
+        <div class="plate-display" id="dashPlate">—</div>
+
+        <div class="dash-row"><span>Account email</span><span id="dashEmail2">—</span></div>
+        <div class="dash-row"><span>Registered plate</span><span id="dashPlate2">—</span></div>
+        <div class="dash-row"><span>Status</span><span style="color:var(--signal);">Active</span></div>
+
+        <button class="logout-btn" id="logoutBtn" type="button">Sign out</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var USERS_KEY = "tracknet_users";
+  var SESSION_KEY = "tracknet_session";
+
+  function getUsers(){
+    try{ return JSON.parse(localStorage.getItem(USERS_KEY)) || []; }
+    catch(e){ return []; }
+  }
+  function saveUsers(users){
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  }
+  // NOTE: this is a lightweight demo-only obfuscation, not real password security.
+  function hash(str){
+    var h = 0;
+    for(var i=0;i<str.length;i++){
+      h = ((h<<5)-h) + str.charCodeAt(i);
+      h |= 0;
+    }
+    return "h" + h + "_" + btoa(unescape(encodeURIComponent(str))).slice(0,12);
+  }
+
+  var authView = document.getElementById('authView');
+  var dash = document.getElementById('dash');
+  var tabLogin = document.getElementById('tabLogin');
+  var tabRegister = document.getElementById('tabRegister');
+  var loginForm = document.getElementById('loginForm');
+  var registerForm = document.getElementById('registerForm');
+  var toast = document.getElementById('toast');
+
+  function showToast(msg, type){
+    toast.textContent = msg;
+    toast.className = "toast show " + type;
+  }
+  function clearToast(){
+    toast.className = "toast";
+    toast.textContent = "";
+  }
+
+  function setTab(which){
+    clearToast();
+    if(which === 'login'){
+      tabLogin.classList.add('active');
+      tabRegister.classList.remove('active');
+      loginForm.style.display = 'block';
+      registerForm.style.display = 'none';
+    } else {
+      tabRegister.classList.add('active');
+      tabLogin.classList.remove('active');
+      registerForm.style.display = 'block';
+      loginForm.style.display = 'none';
+    }
+  }
+  tabLogin.addEventListener('click', function(){ setTab('login'); });
+  tabRegister.addEventListener('click', function(){ setTab('register'); });
+  document.getElementById('goRegister').addEventListener('click', function(){ setTab('register'); });
+  document.getElementById('goLogin').addEventListener('click', function(){ setTab('login'); });
+
+  // password show/hide toggles
+  document.querySelectorAll('.pw-toggle').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = document.getElementById(btn.getAttribute('data-target'));
+      if(target.type === 'password'){
+        target.type = 'text';
+        btn.textContent = 'HIDE';
+      } else {
+        target.type = 'password';
+        btn.textContent = 'SHOW';
+      }
+    });
+  });
+
+  function setFieldError(inputEl, hintEl, message){
+    inputEl.classList.add('err');
+    hintEl.textContent = message;
+    hintEl.classList.add('err');
+  }
+  function clearFieldError(inputEl, hintEl, defaultText){
+    inputEl.classList.remove('err');
+    hintEl.textContent = defaultText || "";
+    hintEl.classList.remove('err');
+  }
+
+  var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  var plateRe = /^[A-Z0-9]{2,4}[A-Z0-9 \-]{1,7}[A-Z0-9]$/;
+
+  function normalizePlate(v){
+    return v.toUpperCase().replace(/\s+/g,' ').trim();
+  }
+
+  // ---- REGISTER ----
+  registerForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    clearToast();
+
+    var emailEl = document.getElementById('regEmail');
+    var plateEl = document.getElementById('regPlate');
+    var pwEl = document.getElementById('regPassword');
+    var confirmEl = document.getElementById('regConfirm');
+
+    var emailHint = document.getElementById('regEmailHint');
+    var plateHint = document.getElementById('regPlateHint');
+    var pwHint = document.getElementById('regPasswordHint');
+    var confirmHint = document.getElementById('regConfirmHint');
+
+    clearFieldError(emailEl, emailHint);
+    clearFieldError(plateEl, plateHint, "4–12 letters/numbers, spaces allowed.");
+    clearFieldError(pwEl, pwHint);
+    clearFieldError(confirmEl, confirmHint);
+
+    var email = emailEl.value.trim().toLowerCase();
+    var plate = normalizePlate(plateEl.value);
+    var pw = pwEl.value;
+    var confirm = confirmEl.value;
+
+    var valid = true;
+
+    if(!emailRe.test(email)){
+      setFieldError(emailEl, emailHint, "Enter a valid email address.");
+      valid = false;
+    }
+    if(!plateRe.test(plate.replace(/\s/g,'')) || plate.replace(/\s/g,'').length < 4){
+      setFieldError(plateEl, plateHint, "Enter a valid plate, e.g. TN01AB1234.");
+      valid = false;
+    }
+    if(pw.length < 6){
+      setFieldError(pwEl, pwHint, "Password must be at least 6 characters.");
+      valid = false;
+    }
+    if(confirm !== pw || confirm === ""){
+      setFieldError(confirmEl, confirmHint, "Passwords do not match.");
+      valid = false;
+    }
+
+    if(!valid){
+      showToast("Please fix the highlighted fields.", "error");
+      return;
+    }
+
+    var users = getUsers();
+    if(users.some(function(u){ return u.email === email; })){
+      setFieldError(emailEl, emailHint, "An account with this email already exists.");
+      showToast("That email is already registered.", "error");
+      return;
+    }
+    if(users.some(function(u){ return u.plate === plate; })){
+      setFieldError(plateEl, plateHint, "This plate is already linked to an account.");
+      showToast("That license plate is already registered.", "error");
+      return;
+    }
+
+    users.push({ email: email, plate: plate, pwHash: hash(pw) });
+    saveUsers(users);
+
+    registerForm.reset();
+    showToast("Account created. You can sign in now.", "success");
+    setTab('login');
+    document.getElementById('loginEmail').value = email;
+  });
+
+  // ---- LOGIN ----
+  loginForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    clearToast();
+
+    var emailEl = document.getElementById('loginEmail');
+    var pwEl = document.getElementById('loginPassword');
+    var emailHint = document.getElementById('loginEmailHint');
+    var pwHint = document.getElementById('loginPasswordHint');
+
+    clearFieldError(emailEl, emailHint);
+    clearFieldError(pwEl, pwHint);
+
+    var email = emailEl.value.trim().toLowerCase();
+    var pw = pwEl.value;
+
+    if(!emailRe.test(email)){
+      setFieldError(emailEl, emailHint, "Enter a valid email address.");
+      showToast("Please fix the highlighted fields.", "error");
+      return;
+    }
+    if(pw.length === 0){
+      setFieldError(pwEl, pwHint, "Enter your password.");
+      showToast("Please fix the highlighted fields.", "error");
+      return;
+    }
+
+    var users = getUsers();
+    var user = users.find(function(u){ return u.email === email; });
+
+    if(!user || user.pwHash !== hash(pw)){
+      showToast("Email or password is incorrect.", "error");
+      setFieldError(pwEl, pwHint, "Check your password and try again.");
+      return;
+    }
+
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ email: user.email, plate: user.plate }));
+    loginForm.reset();
+    showToast("", "");
+    clearToast();
+    enterDashboard(user);
+  });
+
+  function enterDashboard(user){
+    authView.style.display = 'none';
+    dash.classList.add('show');
+    document.getElementById('dashEmail').textContent = user.email;
+    document.getElementById('dashEmail2').textContent = user.email;
+    document.getElementById('dashPlate').textContent = user.plate;
+    document.getElementById('dashPlate2').textContent = user.plate;
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', function(){
+    sessionStorage.removeItem(SESSION_KEY);
+    dash.classList.remove('show');
+    authView.style.display = 'block';
+    setTab('login');
+  });
+
+  // restore session on load
+  (function init(){
+    try{
+      var session = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+      if(session && session.email){
+        var users = getUsers();
+        var user = users.find(function(u){ return u.email === session.email; });
+        if(user){ enterDashboard(user); return; }
+      }
+    }catch(e){}
+    setTab('login');
+  })();
+
+})();
+</script>
+
+</body>
+</html>

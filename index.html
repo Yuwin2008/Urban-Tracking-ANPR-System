@@ -1227,13 +1227,13 @@ function AlertSystem({ onTrack }) {
 
 function AboutTeam() {
   const theme = React.useContext(ThemeContext);
-  const members = [
-    { role: "Team Leader: EE26BT002", name: "Waqar Ahmad Khan" },
-    { role: "IS26BSM02", name: "Sairaj Dilip Vernekar" },
-    { role: "EC26BT030", name: "Saurabh Maurya" },
-    { role: "EC26BT032", name: "R L Yuwin" },
-    { role: "EP26BT011", name: "Diya Prince" },
-    { role: "EP26BT026", name: "Sumanth Rajendra Salve" },
+  const members = [ 
+    { id: "EE26BT002", name: "Waqar Ahmad Khan", role: "Team Lead & Backend Developer" }, 
+    { id: "IS26BSM02", name: "Sairaj Dilip Vernekar", role: "Frontend & Backend Web Developer" }, 
+    { id: "EC26BT030", name: "Saurabh Maurya", role: "Prompt Engineer" }, 
+    { id: "EC26BT032", name: "R L Yuwin", role: "AI/ML & Backend Engineer" }, 
+    { id: "EP26BT011", name: "Diya Prince", role: "Research Lead" }, 
+    { id: "EP26BT026", name: "Sumanth Rajendra Salve", role: "Presentation & Documentation Lead" }, 
   ];
   const stack = {
     "AI / OCR": ["YOLOv8", "PaddleOCR / EasyOCR", "OpenCV", "PyTorch"],

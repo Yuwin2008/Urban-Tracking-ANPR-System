@@ -44,7 +44,8 @@ const {
   TrendingUp, TrendingDown, Navigation, Cpu, Database, Eye, Upload,
   ChevronRight, Sun, CloudFog, Wind, Loader2, ArrowRight, BadgeCheck, Car,
   Flag, Radar, Layers, Github, Linkedin, Mail, X, Menu, ChevronsRight,
-  CircleDot, Crosshair, SunDim, Sparkles, Signal, ServerCog, Moon,
+  CircleDot, Crosshair, SunDim, Sparkles, Signal, ServerCog, Moon, LogOut,
+  User,
 } = LucideReact;
 
 /* ======================================================================
@@ -652,18 +653,9 @@ function Overview({ goTo, liveData }) {
    2. ANPR / OCR MODULE
    ====================================================================== */
 
-/* Where the Flask backend (server.py) lives relative to this page.
-   The page is served from <project-root>/Website/sihweb4.html, and
-   server.py serves the whole project root as static files, so a
-   plain "../" gets us back to the root for both API calls and assets. */
 const API_BASE = "../api/anpr";
 const assetUrl = (p) => (p ? `../${p}` : null);
 
-/* Pulls whatever anpr.py / server.py has appended to output/results.json
-   so real, already-processed detections show up alongside the demo
-   samples. Fails silently (empty list) if the file isn't reachable,
-   e.g. when the page is opened as a local file:// instead of served
-   by server.py. */
 function useAnprResults() {
   const [state, setState] = useState({ status: "loading", detections: [] });
   useEffect(() => {
@@ -891,6 +883,7 @@ function TrajectoryTracking({ query, setQuery, liveData }) {
   const theme = React.useContext(ThemeContext);
   const [active, setActive] = useState(null);
   const [hoverIdx, setHoverIdx] = useState(null);
+  const [mapView, setMapView] = useState("stylized"); // "stylized" | "real"
 
   const result = useMemo(() => {
     const clean = query.replace(/\s+/g, "").toUpperCase();
@@ -991,17 +984,39 @@ function TrajectoryTracking({ query, setQuery, liveData }) {
           <GlassCard className="p-4 lg:col-span-3">
             <div className="mb-3 flex items-center justify-between">
               <span className="font-data text-[11px] uppercase tracking-widest text-slate-500">Reconstructed Route</span>
-              <Badge tone="emerald">
-                {(() => {
-                  const [h1, m1] = hits[0].time.split(":").map(Number);
-                  const [h2, m2] = hits[hits.length - 1].time.split(":").map(Number);
-                  const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
-                  return `Span: ${mins >= 0 ? mins : mins + 1440} min`;
-                })()}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-md border border-slate-700 p-0.5">
+                  <button onClick={() => setMapView("stylized")}
+                    className={`rounded px-2 py-1 font-data text-[10px] uppercase transition ${mapView === "stylized" ? `bg-${theme.c500}/20 text-${theme.c300}` : "text-slate-500"}`}>
+                    Stylized
+                  </button>
+                  <button onClick={() => setMapView("real")}
+                    className={`rounded px-2 py-1 font-data text-[10px] uppercase transition ${mapView === "real" ? `bg-${theme.c500}/20 text-${theme.c300}` : "text-slate-500"}`}>
+                    Real GPS Map
+                  </button>
+                </div>
+                <Badge tone="emerald">
+                  {(() => {
+                    const [h1, m1] = hits[0].time.split(":").map(Number);
+                    const [h2, m2] = hits[hits.length - 1].time.split(":").map(Number);
+                    const mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+                    return `Span: ${mins >= 0 ? mins : mins + 1440} min`;
+                  })()}
+                </Badge>
+              </div>
             </div>
-            <CityMap highlightPath={hits} activeCamera={active} onNodeClick={setActive} height={440}
-              camMap={camMap} camerasList={camerasList} roads={roads} />
+            {mapView === "stylized" ? (
+              <CityMap highlightPath={hits} activeCamera={active} onNodeClick={setActive} height={440}
+                camMap={camMap} camerasList={camerasList} roads={roads} />
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-slate-800" style={{ height: 440 }}>
+                <iframe
+                  title="Real GPS route map"
+                  src="../map_ouput/map.html"
+                  className="h-full w-full border-0"
+                />
+              </div>
+            )}
           </GlassCard>
         </div>
       )}
@@ -1019,8 +1034,11 @@ function speedColor(v, theme) {
   return theme.hex;
 }
 
-function TrafficAnalytics() {
+function TrafficAnalytics({ liveData }) {
   const theme = React.useContext(ThemeContext);
+  const isLive = liveData.status === "live";
+  const camMap = isLive ? liveData.camMap : CAM;
+  const camerasList = isLive ? liveData.cameras : CAMERAS;
   return (
     <div className="space-y-6">
       <SectionHeader eyebrow="Module 03" icon={Gauge} title="City Traffic Analytics Dashboard"
@@ -1030,9 +1048,9 @@ function TrafficAnalytics() {
         <GlassCard className="p-4 lg:col-span-3">
           <div className="mb-3 flex items-center justify-between">
             <span className="font-data text-[11px] uppercase tracking-widest text-slate-500">Live Traffic Density Heatmap</span>
-            <Badge tone="cyan">Auto-refresh · 5s</Badge>
+            {isLive ? <Badge tone="emerald">Real camera GPS</Badge> : <Badge tone="cyan">Auto-refresh · 5s</Badge>}
           </div>
-          <CityMap mode="density" height={400} />
+          <CityMap mode="density" height={400} camMap={camMap} camerasList={camerasList} roads={isLive ? [] : ROADS} />
         </GlassCard>
 
         <GlassCard className="p-4 lg:col-span-2">
@@ -1288,6 +1306,380 @@ function AboutTeam() {
 }
 
 /* ======================================================================
+   AUTH — vehicle login / registration gate (ported from vehicle-login.html)
+   ====================================================================== */
+
+const AUTH_USERS_KEY = "tracknet_users";
+const AUTH_SESSION_KEY = "tracknet_session";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PLATE_RE = /^[A-Z0-9]{2,4}[A-Z0-9 \-]{1,7}[A-Z0-9]$/;
+
+function authGetUsers() {
+  try { return JSON.parse(localStorage.getItem(AUTH_USERS_KEY)) || []; }
+  catch (e) { return []; }
+}
+function authSaveUsers(users) {
+  localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users));
+}
+// NOTE: this is a lightweight demo-only obfuscation, not real password security.
+function authHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h) + str.charCodeAt(i);
+    h |= 0;
+  }
+  return "h" + h + "_" + btoa(unescape(encodeURIComponent(str))).slice(0, 12);
+}
+function authNormalizePlate(v) {
+  return v.toUpperCase().replace(/\s+/g, " ").trim();
+}
+function authRestoreSession() {
+  try {
+    const session = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY));
+    if (session && session.email) {
+      const users = authGetUsers();
+      const user = users.find((u) => u.email === session.email);
+      if (user) return { email: user.email, plate: user.plate };
+    }
+  } catch (e) {}
+  return null;
+}
+
+function AuthScreen({ onAuthenticated }) {
+  const [tab, setTab] = useState("login");
+  const [toast, setToast] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [showPw, setShowPw] = useState({});
+
+  const loginEmailRef = useRef(null);
+  const loginPasswordRef = useRef(null);
+  const regEmailRef = useRef(null);
+  const regPlateRef = useRef(null);
+  const regPasswordRef = useRef(null);
+  const regConfirmRef = useRef(null);
+  const registerFormRef = useRef(null);
+
+  const switchTab = (which) => { setTab(which); setToast(null); setErrors({}); };
+  const togglePw = (key) => setShowPw((s) => ({ ...s, [key]: !s[key] }));
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const email = loginEmailRef.current.value.trim().toLowerCase();
+    const pw = loginPasswordRef.current.value;
+    const nextErrors = {};
+    if (!EMAIL_RE.test(email)) nextErrors.loginEmail = "Enter a valid email address.";
+    if (pw.length === 0) nextErrors.loginPassword = "Enter your password.";
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors);
+      setToast({ msg: "Please fix the highlighted fields.", type: "error" });
+      return;
+    }
+    const users = authGetUsers();
+    const user = users.find((u) => u.email === email);
+    if (!user || user.pwHash !== authHash(pw)) {
+      setErrors({ loginPassword: "Check your password and try again." });
+      setToast({ msg: "Email or password is incorrect.", type: "error" });
+      return;
+    }
+    setErrors({});
+    setToast(null);
+    sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ email: user.email, plate: user.plate }));
+    onAuthenticated({ email: user.email, plate: user.plate });
+  };
+
+  const handleRegister = (e) => {
+    e.preventDefault();
+    const email = regEmailRef.current.value.trim().toLowerCase();
+    const plate = authNormalizePlate(regPlateRef.current.value);
+    const pw = regPasswordRef.current.value;
+    const confirm = regConfirmRef.current.value;
+    const nextErrors = {};
+    if (!EMAIL_RE.test(email)) nextErrors.regEmail = "Enter a valid email address.";
+    if (!PLATE_RE.test(plate.replace(/\s/g, "")) || plate.replace(/\s/g, "").length < 4) {
+      nextErrors.regPlate = "Enter a valid plate, e.g. TN01AB1234.";
+    }
+    if (pw.length < 6) nextErrors.regPassword = "Password must be at least 6 characters.";
+    if (confirm !== pw || confirm === "") nextErrors.regConfirm = "Passwords do not match.";
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors);
+      setToast({ msg: "Please fix the highlighted fields.", type: "error" });
+      return;
+    }
+    const users = authGetUsers();
+    if (users.some((u) => u.email === email)) {
+      setErrors({ regEmail: "An account with this email already exists." });
+      setToast({ msg: "That email is already registered.", type: "error" });
+      return;
+    }
+    if (users.some((u) => u.plate === plate)) {
+      setErrors({ regPlate: "This plate is already linked to an account." });
+      setToast({ msg: "That license plate is already registered.", type: "error" });
+      return;
+    }
+    users.push({ email, plate, pwHash: authHash(pw) });
+    authSaveUsers(users);
+    if (registerFormRef.current) registerFormRef.current.reset();
+    setErrors({});
+    setToast({ msg: "Account created. You can sign in now.", type: "success" });
+    setTab("login");
+    const prefillEmail = email;
+    setTimeout(() => { if (loginEmailRef.current) loginEmailRef.current.value = prefillEmail; }, 0);
+  };
+
+  const err = (key) => errors[key];
+
+  return (
+    <div className="auth-shell">
+      <style>{`
+        .auth-shell{
+          --asphalt:#000000;
+          --asphalt-2:#0A0A0C;
+          --panel:#131519;
+          --line: rgba(241,238,230,0.08);
+          --ivory:#F1EEE6;
+          --steel:#8992A3;
+          --plate-yellow:#F4C430;
+          --plate-yellow-dim:#D9AE1E;
+          --plate-yellow-glow: rgba(244,196,48,0.55);
+          --taillight:#E5484D;
+          --taillight-glow: rgba(229,72,77,0.5);
+          --signal:#3FB68B;
+          box-sizing:border-box;
+          min-height:100vh;
+          width:100%;
+          background:var(--asphalt);
+          color:var(--ivory);
+          font-family:'Inter',ui-sans-serif,sans-serif;
+          display:flex;
+          align-items:stretch;
+          justify-content:center;
+        }
+        .auth-shell *{ box-sizing:border-box; }
+        .auth-shell .stage{ width:100%; max-width:1180px; display:flex; min-height:100vh; }
+        .auth-shell .road{
+          position:relative; flex:1.05;
+          background: linear-gradient(180deg, var(--asphalt-2) 0%, var(--asphalt) 100%);
+          overflow:hidden; display:flex; flex-direction:column; justify-content:space-between;
+          padding:56px 52px; border-right:1px solid var(--line);
+        }
+        .auth-shell .lane{
+          position:absolute; top:0; bottom:0; left:50%; width:10px; margin-left:-5px;
+          background-image: repeating-linear-gradient(to bottom, var(--plate-yellow) 0 46px, transparent 46px 92px);
+          opacity:0.85; animation: authDrive 1.6s linear infinite;
+        }
+        @keyframes authDrive{ from{ background-position-y: 0; } to{ background-position-y: 92px; } }
+        .auth-shell .road-mask{ position:absolute; inset:0; background: radial-gradient(120% 90% at 50% 0%, transparent 40%, var(--asphalt) 92%); }
+        .auth-shell .brand{ position:relative; z-index:2; display:flex; align-items:center; gap:12px; }
+        .auth-shell .brand-mark{
+          width:38px;height:38px;border-radius:9px; background:var(--plate-yellow);
+          display:flex;align-items:center;justify-content:center;
+          font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--asphalt); font-size:19px;
+        }
+        .auth-shell .brand-name{ font-family:'Rajdhani',sans-serif; font-weight:600; font-size:20px; letter-spacing:0.5px; }
+        .auth-shell .hero{ position:relative; z-index:2; max-width:420px; }
+        .auth-shell .hero-eyebrow{
+          font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:2px;
+          color:var(--plate-yellow); text-transform:uppercase; margin-bottom:14px;
+        }
+        .auth-shell .hero h1{ font-family:'Rajdhani',sans-serif; font-weight:700; font-size:44px; line-height:1.05; margin:0 0 16px; letter-spacing:0.3px; }
+        .auth-shell .hero p{ color:var(--steel); font-size:15px; line-height:1.6; margin:0; }
+        .auth-shell .stat-row{ position:relative; z-index:2; display:flex; gap:28px; font-family:'JetBrains Mono',monospace; }
+        .auth-shell .stat b{ display:block; font-size:22px; color:var(--ivory); }
+        .auth-shell .stat span{ font-size:11px; color:var(--steel); letter-spacing:1px; text-transform:uppercase; }
+        .auth-shell .panel-wrap{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px 32px; background:var(--asphalt); }
+        .auth-shell .card{ width:100%; max-width:400px; }
+        .auth-shell .tabs{ display:flex; background:var(--panel); border-radius:12px; padding:4px; margin-bottom:28px; border:1px solid var(--line); }
+        .auth-shell .tab-btn{
+          flex:1; padding:11px 0; border:none; background:transparent; color:var(--steel);
+          font-family:'Rajdhani',sans-serif; font-weight:600; font-size:15px; letter-spacing:0.4px;
+          border-radius:9px; cursor:pointer; transform:translateY(0) translateZ(0);
+          transition:background .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease;
+        }
+        .auth-shell .tab-btn.active{
+          background:var(--plate-yellow); color:var(--asphalt); transform:translateY(-2px);
+          box-shadow:0 6px 16px var(--plate-yellow-glow), 0 3px 0 var(--plate-yellow-dim);
+        }
+        .auth-shell .tab-btn:not(.active):hover{ color:var(--ivory); transform:translateY(-1px); }
+        .auth-shell .tab-btn:active{ transform:translateY(1px); }
+        .auth-shell h2.form-title{ font-family:'Rajdhani',sans-serif; font-size:26px; font-weight:700; margin:0 0 6px; }
+        .auth-shell .form-sub{ color:var(--steel); font-size:13.5px; margin:0 0 26px; }
+        .auth-shell .field{ margin-bottom:18px; position:relative; }
+        .auth-shell .field label{
+          display:block; font-size:12px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase;
+          color:var(--steel); margin-bottom:7px;
+        }
+        .auth-shell .field input{
+          width:100%; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+          padding:13px 14px; color:var(--ivory); font-family:'Inter',sans-serif; font-size:14.5px;
+          outline:none; transition:border-color .15s ease, box-shadow .15s ease;
+        }
+        .auth-shell .field input::placeholder{ color:#5B6272; }
+        .auth-shell .field input:focus{ border-color:var(--plate-yellow); box-shadow:0 0 0 3px rgba(244,196,48,0.15); }
+        .auth-shell .field input.err{ border-color:var(--taillight); }
+        .auth-shell .pw-field{ position:relative; }
+        .auth-shell .pw-toggle{
+          position:absolute; right:10px; top:37px; background:none; border:none; color:var(--steel);
+          font-family:'Inter',sans-serif; font-size:12px; font-weight:600; cursor:pointer; padding:6px 8px;
+          transition:color .15s ease, text-shadow .15s ease;
+        }
+        .auth-shell .pw-toggle:hover{ color:var(--plate-yellow); text-shadow:0 0 10px var(--plate-yellow-glow); }
+        .auth-shell .plate-field input{
+          font-family:'JetBrains Mono',monospace; font-weight:700; letter-spacing:3px; font-size:17px;
+          text-transform:uppercase; color:var(--asphalt); background:var(--plate-yellow);
+          border:2px solid var(--plate-yellow-dim); text-align:center; padding:14px 10px 12px;
+        }
+        .auth-shell .plate-field input::placeholder{ color:rgba(20,22,27,0.45); letter-spacing:2px; }
+        .auth-shell .plate-field input:focus{ box-shadow:0 0 0 3px rgba(244,196,48,0.3); border-color:var(--asphalt); }
+        .auth-shell .plate-field{ position:relative; }
+        .auth-shell .plate-bolt{ position:absolute; width:5px;height:5px;border-radius:50%; background:rgba(20,22,27,0.5); top:44px; }
+        .auth-shell .plate-bolt.l{ left:10px; }
+        .auth-shell .plate-bolt.r{ right:10px; }
+        .auth-shell .hint{ font-size:11.5px; color:var(--steel); margin-top:6px; }
+        .auth-shell .hint.err{ color:var(--taillight); }
+        .auth-shell .submit-btn{
+          position:relative; width:100%; padding:15px 0; border:none; border-radius:10px;
+          background:linear-gradient(180deg, #FFDE6E 0%, var(--plate-yellow) 55%, var(--plate-yellow-dim) 100%);
+          color:var(--asphalt); font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16px;
+          letter-spacing:0.5px; cursor:pointer; margin-top:6px;
+          transform:perspective(600px) translateY(0) rotateX(0deg) translateZ(0);
+          box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 8px 18px var(--plate-yellow-glow);
+          transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
+          animation: authBtnGlow 2.6s ease-in-out infinite;
+        }
+        .auth-shell .submit-btn:hover{ transform:perspective(600px) translateY(-4px) rotateX(4deg); box-shadow: 0 9px 0 var(--plate-yellow-dim), 0 22px 34px var(--plate-yellow-glow); }
+        .auth-shell .submit-btn:active{ transform:perspective(600px) translateY(2px) rotateX(0deg); box-shadow: 0 2px 0 var(--plate-yellow-dim), 0 6px 12px var(--plate-yellow-glow); animation-play-state: paused; }
+        @keyframes authBtnGlow{ 0%, 100%{ box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 8px 18px var(--plate-yellow-glow); } 50%{ box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 12px 30px rgba(244,196,48,0.85); } }
+        .auth-shell .switch-line{ text-align:center; margin-top:20px; font-size:13.5px; color:var(--steel); }
+        .auth-shell .switch-line button{ background:none; border:none; color:var(--plate-yellow); font-weight:600; cursor:pointer; font-size:13.5px; padding:0; }
+        .auth-shell .switch-line button:hover{ text-decoration:underline; }
+        .auth-shell .toast{ display:flex; align-items:center; gap:8px; padding:11px 14px; border-radius:9px; font-size:13px; margin-bottom:18px; border:1px solid transparent; }
+        .auth-shell .toast.error{ background:rgba(229,72,77,0.12); border-color:rgba(229,72,77,0.4); color:#FF9A9D; }
+        .auth-shell .toast.success{ background:rgba(63,182,139,0.12); border-color:rgba(63,182,139,0.4); color:#7CE0BB; }
+        .auth-shell button:focus-visible, .auth-shell input:focus-visible{ outline:2px solid var(--plate-yellow); outline-offset:2px; }
+        @media (max-width:900px){
+          .auth-shell .stage{ flex-direction:column; min-height:auto; }
+          .auth-shell .road{ padding:36px 28px; border-right:none; border-bottom:1px solid var(--line); min-height:260px; }
+          .auth-shell .hero h1{ font-size:32px; }
+          .auth-shell .stat-row{ margin-top:24px; }
+          .auth-shell .lane{ display:none; }
+          .auth-shell .panel-wrap{ padding:32px 24px 56px; }
+        }
+        @media (prefers-reduced-motion: reduce){
+          .auth-shell .lane{ animation:none; }
+          .auth-shell .submit-btn{ animation:none; }
+        }
+      `}</style>
+
+      <div className="stage">
+        <div className="road">
+          <div className="lane"></div>
+          <div className="road-mask"></div>
+          <div className="brand">
+            <div className="brand-mark">T</div>
+            <div className="brand-name">TrackNet</div>
+          </div>
+          <div className="hero">
+            <div className="hero-eyebrow">Vehicle account access</div>
+            <h1>One account.<br />Every vehicle you drive.</h1>
+            <p>Register with your email and license plate to unlock the ANPR command center — trajectory tracking, live alerts and traffic analytics for your fleet.</p>
+          </div>
+          <div className="stat-row">
+            <div className="stat"><b>128k+</b><span>Plates registered</span></div>
+            <div className="stat"><b>4.9</b><span>Driver rating</span></div>
+            <div className="stat"><b>24/7</b><span>Garage access</span></div>
+          </div>
+        </div>
+
+        <div className="panel-wrap">
+          <div className="card">
+            <div className="tabs">
+              <button className={`tab-btn ${tab === "login" ? "active" : ""}`} type="button" onClick={() => switchTab("login")}>Sign in</button>
+              <button className={`tab-btn ${tab === "register" ? "active" : ""}`} type="button" onClick={() => switchTab("register")}>Register</button>
+            </div>
+
+            {toast && <div className={`toast show ${toast.type}`}>{toast.msg}</div>}
+
+            {tab === "login" ? (
+              <form onSubmit={handleLogin} noValidate>
+                <h2 className="form-title">Sign in</h2>
+                <p className="form-sub">Access your vehicle profile.</p>
+
+                <div className="field">
+                  <label htmlFor="loginEmail">Email address</label>
+                  <input ref={loginEmailRef} type="email" id="loginEmail" placeholder="you@example.com" autoComplete="email"
+                    className={err("loginEmail") ? "err" : ""} />
+                  <div className={`hint ${err("loginEmail") ? "err" : ""}`}>{err("loginEmail") || ""}</div>
+                </div>
+
+                <div className="field pw-field">
+                  <label htmlFor="loginPassword">Password</label>
+                  <input ref={loginPasswordRef} type={showPw.loginPassword ? "text" : "password"} id="loginPassword"
+                    placeholder="Enter your password" autoComplete="current-password"
+                    className={err("loginPassword") ? "err" : ""} />
+                  <button type="button" className="pw-toggle" onClick={() => togglePw("loginPassword")}>{showPw.loginPassword ? "HIDE" : "SHOW"}</button>
+                  <div className={`hint ${err("loginPassword") ? "err" : ""}`}>{err("loginPassword") || ""}</div>
+                </div>
+
+                <button type="submit" className="submit-btn">Sign in</button>
+
+                <div className="switch-line">
+                  No account yet? <button type="button" onClick={() => switchTab("register")}>Register here</button>
+                </div>
+              </form>
+            ) : (
+              <form ref={registerFormRef} onSubmit={handleRegister} noValidate>
+                <h2 className="form-title">Create account</h2>
+                <p className="form-sub">Link your email and plate to get started.</p>
+
+                <div className="field">
+                  <label htmlFor="regEmail">Email address</label>
+                  <input ref={regEmailRef} type="email" id="regEmail" placeholder="you@example.com" autoComplete="email"
+                    className={err("regEmail") ? "err" : ""} />
+                  <div className={`hint ${err("regEmail") ? "err" : ""}`}>{err("regEmail") || ""}</div>
+                </div>
+
+                <div className="field plate-field">
+                  <label htmlFor="regPlate">Vehicle license plate</label>
+                  <input ref={regPlateRef} type="text" id="regPlate" placeholder="TN 01 AB 1234" maxLength={12}
+                    className={err("regPlate") ? "err" : ""} />
+                  <span className="plate-bolt l"></span>
+                  <span className="plate-bolt r"></span>
+                  <div className={`hint ${err("regPlate") ? "err" : ""}`}>{err("regPlate") || "4–12 letters/numbers, spaces allowed."}</div>
+                </div>
+
+                <div className="field pw-field">
+                  <label htmlFor="regPassword">Password</label>
+                  <input ref={regPasswordRef} type={showPw.regPassword ? "text" : "password"} id="regPassword"
+                    placeholder="Minimum 6 characters" autoComplete="new-password"
+                    className={err("regPassword") ? "err" : ""} />
+                  <button type="button" className="pw-toggle" onClick={() => togglePw("regPassword")}>{showPw.regPassword ? "HIDE" : "SHOW"}</button>
+                  <div className={`hint ${err("regPassword") ? "err" : ""}`}>{err("regPassword") || ""}</div>
+                </div>
+
+                <div className="field pw-field">
+                  <label htmlFor="regConfirm">Confirm password</label>
+                  <input ref={regConfirmRef} type={showPw.regConfirm ? "text" : "password"} id="regConfirm"
+                    placeholder="Re-enter password" autoComplete="new-password"
+                    className={err("regConfirm") ? "err" : ""} />
+                  <button type="button" className="pw-toggle" onClick={() => togglePw("regConfirm")}>{showPw.regConfirm ? "HIDE" : "SHOW"}</button>
+                  <div className={`hint ${err("regConfirm") ? "err" : ""}`}>{err("regConfirm") || ""}</div>
+                </div>
+
+                <button type="submit" className="submit-btn">Create account</button>
+
+                <div className="switch-line">
+                  Already registered? <button type="button" onClick={() => switchTab("login")}>Sign in</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================================
    SHELL — sidebar, topbar, app
    ====================================================================== */
 
@@ -1353,12 +1745,26 @@ function App() {
   const now = useClock();
   const liveData = useLiveData();
 
+  /* -------- AUTH GATE -------- */
+  const [user, setUser] = useState(() => authRestoreSession());
+
   const goTo = (id) => { setSection(id); setMobileOpen(false); };
   const trackPlate = (plate) => { setTrajQuery(plate); goTo("trajectory"); };
+  const handleLogout = () => {
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    setUser(null);
+    setSection("overview");
+    setMobileOpen(false);
+  };
 
   useEffect(() => {
     document.body.style.background = isLight ? "#f6f1e7" : "#020617";
   }, [isLight]);
+
+  // Not signed in yet — show the login/register screen instead of the dashboard.
+  if (!user) {
+    return <AuthScreen onAuthenticated={setUser} />;
+  }
 
   return (
     <ThemeContext.Provider value={theme}>
@@ -1460,6 +1866,19 @@ function App() {
             ))}
           </nav>
           <div className="space-y-3 border-t border-slate-800/80 px-4 py-4">
+            <div className="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2.5">
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-${theme.c500}/10 text-${theme.c300}`}>
+                <User size={15} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium text-slate-200">{user.email}</div>
+                <div className="font-data truncate text-[10px] text-slate-500">{user.plate}</div>
+              </div>
+              <button onClick={handleLogout} title="Sign out" aria-label="Sign out"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-rose-300">
+                <LogOut size={14} />
+              </button>
+            </div>
             <div>
               <div className="mb-1.5 font-data text-[9.5px] uppercase tracking-widest text-slate-600">Appearance</div>
               <div className="flex items-center gap-2">
@@ -1493,6 +1912,19 @@ function App() {
                 </div>
                 <button onClick={() => setMobileOpen(false)} className="text-slate-500"><X size={18} /></button>
               </div>
+              <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2.5">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-${theme.c500}/10 text-${theme.c300}`}>
+                  <User size={15} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium text-slate-200">{user.email}</div>
+                  <div className="font-data truncate text-[10px] text-slate-500">{user.plate}</div>
+                </div>
+                <button onClick={handleLogout} title="Sign out" aria-label="Sign out"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-rose-300">
+                  <LogOut size={14} />
+                </button>
+              </div>
               <div className="mb-4 flex items-center gap-2">
                 <ModeToggle mode={mode} setMode={setMode} />
               </div>
@@ -1522,7 +1954,7 @@ function App() {
                   {NAV.find((n) => n.id === section)?.label}
                 </div>
                 <div className="hidden font-data text-[10px] text-slate-500 sm:block">
-                   Metropolitan Zone · Simulated Data Environment
+                  Digitalizing the cities · Simulated Data Environment
                 </div>
               </div>
             </div>
@@ -1543,6 +1975,10 @@ function App() {
               <div className="font-data hidden text-xs text-slate-400 md:block">
                 {now.toLocaleTimeString("en-IN", { hour12: false })}
               </div>
+              <button onClick={handleLogout} title="Sign out" aria-label="Sign out"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-800 text-slate-400 transition hover:border-rose-500/40 hover:text-rose-300 lg:hidden">
+                <LogOut size={14} />
+              </button>
             </div>
           </header>
 
@@ -1550,7 +1986,7 @@ function App() {
             {section === "overview" && <Overview goTo={goTo} liveData={liveData} />}
             {section === "anpr" && <AnprModule />}
             {section === "trajectory" && <TrajectoryTracking query={trajQuery} setQuery={setTrajQuery} liveData={liveData} />}
-            {section === "analytics" && <TrafficAnalytics />}
+            {section === "analytics" && <TrafficAnalytics liveData={liveData} />}
             {section === "alerts" && <AlertSystem onTrack={trackPlate} />}
             {section === "about" && <AboutTeam />}
           </main>

@@ -18,6 +18,11 @@ known to be extremely slow (many minutes per image) on Apple Silicon
 Macs; EasyOCR is CPU-friendly and typically finishes in a couple of
 seconds per plate crop.
 
+Also includes plate-format auto-correction (see correct_plate_format())
+that fixes common OCR character-class mix-ups — 0/O, 1/I, 2/Z, 5/S, 6/G,
+8/B — using the fixed Indian plate pattern (SS DD L{1,3} DDDD) to know
+which positions must be letters vs. digits.
+
 Run:
     pip install -r requirements.txt
     python server.py
@@ -27,6 +32,7 @@ Then open:
 """
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -58,6 +64,54 @@ print("Models loaded.\n")
 # Website/index.html's "../camera_config.json" etc. resolve for free.
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
 CORS(app)
+
+
+# ---------------------------------------------------------------------------
+# Plate-format auto-correction — Indian plates follow a fixed character
+# pattern (SS DD L{1,3} DDDD: 2 state letters, 2 RTO digits, 1-3 series
+# letters, 4 number digits). EasyOCR frequently confuses characters that
+# look alike across the letter/digit boundary (0/O, 1/I, 2/Z, 5/S, 6/G,
+# 8/B). Since we know which *class* of character (letter vs digit) is
+# expected at each position, we can force ambiguous reads back to the
+# correct class instead of guessing blindly.
+# ---------------------------------------------------------------------------
+PLATE_RE = re.compile(r"^[A-Z]{2}[0-9]{2}[A-Z]{1,3}[0-9]{4}$")
+
+DIGIT_TO_LETTER = {"0": "O", "1": "I", "2": "Z", "5": "S", "6": "G", "8": "B"}
+LETTER_TO_DIGIT = {"O": "0", "I": "1", "L": "1", "Z": "2", "S": "5", "G": "6", "B": "8", "D": "0", "Q": "0"}
+
+
+def _force_letter(ch):
+    return ch if ch.isalpha() else DIGIT_TO_LETTER.get(ch, ch)
+
+
+def _force_digit(ch):
+    return ch if ch.isdigit() else LETTER_TO_DIGIT.get(ch, ch)
+
+
+def correct_plate_format(raw_text):
+    """Attempts to reshape a raw OCR string into a valid Indian plate by
+    correcting characters that don't match the expected class for their
+    position. Returns (corrected_text, is_valid). is_valid is only True
+    when the corrected string fully matches the plate pattern — callers
+    should treat that as a strong extra confidence signal, since it means
+    the read is structurally consistent with a real plate, not just a
+    per-character guess."""
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", raw_text or "").upper()
+    if not (9 <= len(cleaned) <= 11):
+        return cleaned, False
+
+    series_len = len(cleaned) - 8  # state(2) + rto(2) + number(4) = 8 fixed chars
+    state, rto = cleaned[0:2], cleaned[2:4]
+    series, number = cleaned[4:4 + series_len], cleaned[4 + series_len:]
+
+    corrected = (
+        "".join(_force_letter(c) for c in state)
+        + "".join(_force_digit(c) for c in rto)
+        + "".join(_force_letter(c) for c in series)
+        + "".join(_force_digit(c) for c in number)
+    )
+    return corrected, bool(PLATE_RE.match(corrected))
 
 
 def _next_plate_index():
@@ -104,6 +158,22 @@ def run_anpr(image):
                 recognized_text = " ".join(r[1] for r in ocr_results).strip()
                 ocr_conf = sum(r[2] for r in ocr_results) / len(ocr_results)
 
+            # Auto-correct common OCR character-class confusions (0/O, 1/I,
+            # 5/S, 8/B, ...) using the expected Indian plate pattern. Only
+            # applied when the corrected string is fully format-valid, so
+            # this never overwrites a read with a worse guess.
+            raw_ocr_text = recognized_text
+            format_valid = False
+            if recognized_text:
+                corrected_text, format_valid = correct_plate_format(recognized_text)
+                if format_valid:
+                    recognized_text = corrected_text
+                    # Format validation is strong independent evidence the
+                    # read is correct, on top of EasyOCR's own per-character
+                    # confidence — so raise the reported confidence, but
+                    # never lower it if EasyOCR was already more confident.
+                    ocr_conf = max(ocr_conf, 0.95)
+
             cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 3)
             cv2.putText(annotated, f"{recognized_text} ({ocr_conf:.2f})",
                         (x1, max(30, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -112,6 +182,11 @@ def run_anpr(image):
                 "plate": recognized_text,
                 "detector_confidence": det_conf,
                 "ocr_confidence": ocr_conf,
+                "format_valid": format_valid,
+                # only present when correction actually changed the reading,
+                # so you can audit what EasyOCR originally saw vs. what was
+                # auto-corrected
+                **({"raw_ocr_text": raw_ocr_text} if raw_ocr_text != recognized_text else {}),
                 "bounding_box": {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
                 # forward-slash, relative to project root, so it works as a URL
                 "crop": crop_path.relative_to(BASE_DIR).as_posix(),

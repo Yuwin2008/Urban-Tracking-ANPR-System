@@ -347,6 +347,100 @@ function useLiveData() {
 }
 
 /* ======================================================================
+   LIVE GPS LAYER — polls gps_server.py (camera_locations.json via /gps)
+   and plots the real lat/lon reports on the city map.
+   ====================================================================== */
+
+const GPS_SERVER_URL = "http://10.200.127.26:5000"; // change to your gps_server.py host:port
+const GPS_POLL_MS = 4000;
+
+function projectGpsCameras(camJson) {
+  const entries = Object.entries(camJson || {}).filter(
+    ([, c]) => typeof c.latitude === "number" && typeof c.longitude === "number"
+  );
+  if (entries.length === 0) return { cameras: [], camMap: {} };
+
+  const lats = entries.map(([, c]) => c.latitude);
+  const lons = entries.map(([, c]) => c.longitude);
+  const latMin = Math.min(...lats), latMax = Math.max(...lats);
+  const lonMin = Math.min(...lons), lonMax = Math.max(...lons);
+  const latRange = latMax - latMin || 0.001;
+  const lonRange = lonMax - lonMin || 0.001;
+  const PAD = 80, W = 700, H = 500;
+  const single = entries.length === 1;
+
+  const cameras = entries.map(([id, c]) => ({
+    id,
+    name: c.camera_id || id,
+    zone: "GPS Tracker",
+    latitude: c.latitude,
+    longitude: c.longitude,
+    accuracy: c.accuracy ?? null,
+    timestamp: c.timestamp ?? null,
+    serverReceived: c.server_received ?? null,
+    x: single ? W / 2 : PAD + ((c.longitude - lonMin) / lonRange) * (W - PAD * 2),
+    y: single ? H / 2 : H - PAD - ((c.latitude - latMin) / latRange) * (H - PAD * 2),
+  }));
+  const camMap = Object.fromEntries(cameras.map((c) => [c.id, c]));
+  return { cameras, camMap };
+}
+
+function useLiveGps(pollMs = GPS_POLL_MS) {
+  const [state, setState] = useState({
+    status: "connecting", // "connecting" | "live" | "offline"
+    cameras: [],
+    camMap: {},
+    lastUpdate: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+
+    async function poll() {
+      try {
+        const res = await fetch(`${GPS_SERVER_URL}/gps`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`GPS server responded ${res.status}`);
+        const json = await res.json();
+        const { cameras, camMap } = projectGpsCameras(json);
+        if (cancelled) return;
+        setState({
+          status: cameras.length ? "live" : "offline",
+          cameras,
+          camMap,
+          lastUpdate: new Date(),
+          error: cameras.length ? null : "No camera GPS reports yet",
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setState((s) => ({ ...s, status: "offline", error: err.message }));
+      } finally {
+        if (!cancelled) timer = setTimeout(poll, pollMs);
+      }
+    }
+
+    poll();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [pollMs]);
+
+  return state;
+}
+
+function timeAgo(dateLike) {
+  if (!dateLike) return "—";
+  const d = dateLike instanceof Date ? dateLike : new Date(dateLike);
+  if (isNaN(d.getTime())) return "—";
+  const secs = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  if (secs < 5) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ago`;
+}
+
+/* ======================================================================
    THEME SYSTEM — accent color is swappable at runtime
    ====================================================================== */
 
@@ -540,6 +634,97 @@ function CityMap({
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
         </span>
         LIVE FEED
+      </div>
+    </div>
+  );
+}
+
+/* ======================================================================
+   LIVE GPS MAP — real-world lat/lon reports from gps_server.py
+   ====================================================================== */
+
+function GpsMapSection() {
+  const theme = React.useContext(ThemeContext);
+  const gps = useLiveGps();
+  const [selected, setSelected] = useState(null);
+
+  const statusStyle =
+    gps.status === "live" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" :
+    gps.status === "connecting" ? "border-slate-600/40 bg-slate-800/40 text-slate-400" :
+    "border-rose-500/30 bg-rose-500/10 text-rose-300";
+
+  const statusLabel =
+    gps.status === "live" ? "LIVE GPS FEED" :
+    gps.status === "connecting" ? "CONNECTING…" :
+    "GPS SERVER UNREACHABLE";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-bold text-slate-100">Live Camera GPS Map</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Positions polled from <span className="font-data text-slate-300">{GPS_SERVER_URL}/gps</span> every {Math.round(GPS_POLL_MS / 1000)}s.
+          </p>
+        </div>
+        <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1 font-data text-[10px] ${statusStyle}`}>
+          <span className="relative flex h-1.5 w-1.5">
+            <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${gps.status === "live" ? "animate-ping bg-emerald-400" : "bg-current"}`} />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+          </span>
+          {statusLabel}
+        </div>
+      </div>
+
+      {gps.status === "offline" && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3 text-sm text-rose-200">
+          Couldn't reach the GPS server. Make sure <span className="font-data">gps_server.py</span> is running and reachable at{" "}
+          <span className="font-data">{GPS_SERVER_URL}</span>, and that this page can make cross-origin requests to it.
+          {gps.error ? ` (${gps.error})` : ""}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <CityMap
+            camerasList={gps.cameras}
+            camMap={gps.camMap}
+            roads={[]}
+            activeCamera={selected}
+            onNodeClick={setSelected}
+            height={460}
+          />
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+          <div className="mb-3 font-data text-[10px] uppercase tracking-widest text-slate-500">
+            Cameras Reporting ({gps.cameras.length})
+          </div>
+          <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+            {gps.cameras.length === 0 && (
+              <div className="text-sm text-slate-500">No GPS reports received yet.</div>
+            )}
+            {gps.cameras.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelected(c.id)}
+                className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
+                  selected === c.id ? `border-${theme.c500}/50 bg-${theme.c500}/10` : "border-slate-800 bg-slate-900/40 hover:border-slate-700"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-data text-xs font-semibold text-slate-200">{c.id}</span>
+                  <span className="font-data text-[10px] text-slate-500">{timeAgo(c.serverReceived || c.timestamp)}</span>
+                </div>
+                <div className="mt-1 font-data text-[10.5px] text-slate-400">
+                  {c.latitude?.toFixed(5)}, {c.longitude?.toFixed(5)}
+                </div>
+                {c.accuracy != null && (
+                  <div className="mt-0.5 font-data text-[10px] text-slate-500">±{c.accuracy}m accuracy</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1694,6 +1879,7 @@ function AuthScreen({ onAuthenticated }) {
 
 const NAV = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "gps", label: "Live GPS Map", icon: Navigation },
   { id: "anpr", label: "ANPR / OCR Engine", icon: ScanLine },
   { id: "trajectory", label: "Trajectory Tracking", icon: Route },
   { id: "analytics", label: "Traffic Analytics", icon: Gauge },
@@ -1993,6 +2179,7 @@ function App() {
 
           <main className="px-4 py-6 md:px-8 md:py-8">
             {section === "overview" && <Overview goTo={goTo} liveData={liveData} />}
+            {section === "gps" && <GpsMapSection />}
             {section === "anpr" && <AnprModule />}
             {section === "trajectory" && <TrajectoryTracking query={trajQuery} setQuery={setTrajQuery} liveData={liveData} />}
             {section === "analytics" && <TrafficAnalytics liveData={liveData} />}

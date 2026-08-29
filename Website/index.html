@@ -1061,6 +1061,347 @@ function AnprModule() {
 }
 
 /* ======================================================================
+   2B. IP WEBCAM — user-entered IP camera feed viewer
+   ====================================================================== */
+
+function IPWebcamFeedCard({ feed, onRemove }) {
+  const theme = React.useContext(ThemeContext);
+  // phase: "cors" (first attempt, requested CORS-enabled so pixels can be read for OCR)
+  //     -> "plain" (fallback attempt without CORS, video still displays but frame capture may be blocked)
+  //     -> "error" (both attempts failed — camera unreachable)
+  const [phase, setPhase] = useState("cors");
+  const [corsOk, setCorsOk] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
+
+  const [autoScan, setAutoScan] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [ocrError, setOcrError] = useState(null);
+  const [lastResult, setLastResult] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  const imgRef = useRef(null);
+  const canvasRef = useRef(null);
+  const scanningRef = useRef(false);
+
+  const errored = phase === "error";
+  const url = `http://${feed.ip}:${feed.port}${feed.path}${retryTick ? `?_r=${retryTick}` : ""}`;
+
+  function handleImgLoad() {
+    if (phase === "cors") setCorsOk(true);
+  }
+  function handleImgError() {
+    // First failure could just be the CORS-mode request being rejected outright by the
+    // camera's HTTP server — retry once in plain mode before declaring it unreachable.
+    setPhase((p) => (p === "cors" ? "plain" : "error"));
+  }
+  function retry() {
+    setPhase("cors");
+    setCorsOk(false);
+    setOcrError(null);
+    setRetryTick((t) => t + 1);
+  }
+
+  // Grabs the current video frame into a canvas and returns it as a JPEG blob.
+  // Throws (via rejected promise) if the browser has tainted the canvas — i.e. the
+  // camera's HTTP server isn't sending CORS headers, so pixels can't be read out.
+  function captureBlob() {
+    return new Promise((resolve, reject) => {
+      const img = imgRef.current;
+      const canvas = canvasRef.current;
+      if (!img || !canvas || !img.complete || !img.naturalWidth) {
+        reject(new Error("Feed isn't ready yet — wait for the stream to load, then try again."));
+        return;
+      }
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      try {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Could not capture a frame from this feed."));
+        }, "image/jpeg", 0.92);
+      } catch (err) {
+        reject(new Error("Browser blocked frame capture — this camera's HTTP server isn't sending CORS headers. Enable cross-origin / CORS access in the IP Webcam app, or proxy the stream through a CORS-enabled endpoint."));
+      }
+    });
+  }
+
+  async function scanNow() {
+    if (scanningRef.current || errored) return;
+    scanningRef.current = true;
+    setScanning(true);
+    setOcrError(null);
+    try {
+      const blob = await captureBlob();
+      const formData = new FormData();
+      formData.append("file", blob, `${feed.ip.replace(/\./g, "-")}-${Date.now()}.jpg`);
+      const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "OCR request failed.");
+      const top = (data.detections && data.detections[0]) || null;
+      const result = {
+        plate: top ? (top.plate || "UNREADABLE") : "NO PLATE DETECTED",
+        confidence: top ? Math.round((top.ocr_confidence || 0) * 100) : 0,
+        time: new Date().toLocaleTimeString("en-IN", { hour12: false }),
+      };
+      setLastResult(result);
+      if (top && top.plate) setHistory((prev) => [result, ...prev].slice(0, 5));
+    } catch (err) {
+      setOcrError(err.message || "Could not run OCR on this frame. Is server.py running?");
+    } finally {
+      scanningRef.current = false;
+      setScanning(false);
+    }
+  }
+
+  // Auto-scan: capture + recognize a frame every 6s while enabled.
+  useEffect(() => {
+    if (!autoScan || errored) return;
+    scanNow();
+    const id = setInterval(scanNow, 6000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScan, errored, feed.ip, feed.port, feed.path]);
+
+  const plateIsReal = lastResult && lastResult.plate !== "UNREADABLE" && lastResult.plate !== "NO PLATE DETECTED";
+
+  return (
+    <GlassCard className="overflow-hidden">
+      <div className="flex items-center justify-between border-b border-slate-800/80 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`relative flex h-1.5 w-1.5 shrink-0`}>
+            <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${errored ? "bg-rose-500" : "animate-ping bg-emerald-400"}`} />
+            <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${errored ? "bg-rose-500" : "bg-emerald-400"}`} />
+          </span>
+          <span className="truncate text-xs font-medium text-slate-200">{feed.label || feed.ip}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="font-data hidden text-[10px] text-slate-500 sm:inline">{feed.ip}:{feed.port}</span>
+          <button onClick={() => onRemove(feed.id)} title="Remove feed" aria-label="Remove feed"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-rose-300">
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+
+      <div className="relative aspect-video w-full bg-slate-950">
+        {!errored ? (
+          <img
+            key={`${retryTick}-${phase}`}
+            ref={imgRef}
+            src={url}
+            alt={feed.label || feed.ip}
+            crossOrigin={phase === "cors" ? "anonymous" : undefined}
+            className="h-full w-full object-contain"
+            onLoad={handleImgLoad}
+            onError={handleImgError}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-slate-500">
+            <ShieldAlert size={22} className="text-rose-400" />
+            <p className="text-xs">Could not reach {feed.ip}:{feed.port}</p>
+            <p className="text-[10px] text-slate-600">Check the IP Webcam app is running and this device is on the same network.</p>
+            <button onClick={retry}
+              className={`mt-1 rounded-md border border-${theme.c500}/40 bg-${theme.c500}/10 px-2.5 py-1 text-[11px] text-${theme.c300} transition hover:border-${theme.c500}`}>
+              Retry
+            </button>
+          </div>
+        )}
+        {/* off-screen canvas used purely to grab frames for OCR — never displayed */}
+        <canvas ref={canvasRef} className="hidden" />
+        <div className="absolute right-2 top-2 rounded bg-slate-950/70 px-1.5 py-0.5 font-data text-[9px] text-slate-400">
+          MJPEG · {feed.path}
+        </div>
+        {scanning && (
+          <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-slate-950/80 px-2 py-1 font-data text-[9px] text-slate-300">
+            <Loader2 size={11} className="animate-spin" /> Scanning…
+          </div>
+        )}
+        {lastResult && !errored && !scanning && (
+          <div className={`absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md border px-2 py-1 ${plateIsReal ? "border-emerald-500/30 bg-slate-950/80" : "border-slate-700 bg-slate-950/80"}`}>
+            <ScanLine size={11} className={plateIsReal ? "text-emerald-400" : "text-slate-500"} />
+            <span className={`font-data text-[11px] font-bold ${plateIsReal ? "text-emerald-300" : "text-slate-500"}`}>{lastResult.plate}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-slate-800/80 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <button onClick={() => setAutoScan((v) => !v)} disabled={errored} title="Continuously scan this feed for plates every 6s"
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-1 font-data text-[10px] transition disabled:cursor-not-allowed disabled:opacity-40 ${autoScan ? `border-${theme.c500}/50 bg-${theme.c500}/10 text-${theme.c300}` : "border-slate-700 text-slate-400 hover:border-slate-500"}`}>
+            <ScanLine size={12} /> Auto-scan {autoScan ? "ON" : "OFF"}
+          </button>
+          <button onClick={scanNow} disabled={errored || scanning}
+            className="flex items-center gap-1.5 rounded-md border border-slate-700 px-2 py-1 font-data text-[10px] text-slate-300 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40">
+            {scanning ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />} Scan now
+          </button>
+        </div>
+
+        {ocrError && <p className="mt-2 text-[11px] text-rose-400">{ocrError}</p>}
+
+        {lastResult && !ocrError && (
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-data text-[9px] uppercase tracking-widest text-slate-500">Recognized plate</div>
+              <div className={`font-data truncate text-base font-bold ${plateIsReal ? `text-${theme.c300}` : "text-slate-500"}`}>{lastResult.plate}</div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="font-data text-[9px] uppercase tracking-widest text-slate-500">Confidence</div>
+              <div className="font-data text-sm text-emerald-300">{lastResult.confidence}%</div>
+            </div>
+          </div>
+        )}
+
+        {history.length > 1 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {history.slice(1).map((h, i) => (
+              <span key={i} className="font-data rounded border border-slate-700 bg-slate-900/60 px-1.5 py-0.5 text-[9.5px] text-slate-400">
+                {h.plate} · {h.time}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {!errored && !corsOk && phase === "plain" && (
+          <p className="mt-2 text-[10px] text-amber-400/80">This camera's server isn't sending CORS headers — plate scans may fail. Enable CORS in the IP Webcam app if scans keep erroring out.</p>
+        )}
+      </div>
+    </GlassCard>
+  );
+}
+
+function IPWebcamModule() {
+  const theme = React.useContext(ThemeContext);
+  const [feeds, setFeeds] = useState([]);
+  const [ipInput, setIpInput] = useState("");
+  const [portInput, setPortInput] = useState("8080");
+  const [pathInput, setPathInput] = useState("/video");
+  const [labelInput, setLabelInput] = useState("");
+  const [formError, setFormError] = useState(null);
+
+  const IP_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+
+  function isValidIp(ip) {
+    const m = ip.match(IP_RE);
+    if (!m) return false;
+    return m.slice(1).every((octet) => Number(octet) <= 255);
+  }
+
+  function addFeed(e) {
+    e.preventDefault();
+    setFormError(null);
+    const ip = ipInput.trim();
+    const port = portInput.trim() || "8080";
+    const path = pathInput.trim() || "/video";
+
+    if (!isValidIp(ip)) {
+      setFormError("Enter a valid IPv4 address, e.g. 192.168.1.42");
+      return;
+    }
+    if (!/^\d{1,5}$/.test(port) || Number(port) > 65535) {
+      setFormError("Enter a valid port number, e.g. 8080");
+      return;
+    }
+    if (feeds.some((f) => f.ip === ip && f.port === port)) {
+      setFormError("That camera is already added.");
+      return;
+    }
+
+    setFeeds((prev) => [
+      ...prev,
+      {
+        id: `${ip}:${port}:${Date.now()}`,
+        ip,
+        port,
+        path: path.startsWith("/") ? path : `/${path}`,
+        label: labelInput.trim(),
+      },
+    ]);
+    setIpInput("");
+    setLabelInput("");
+  }
+
+  function removeFeed(id) {
+    setFeeds((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader eyebrow="Module 02B" icon={Camera} title="IP Webcam — Direct Feed Viewer + Plate OCR"
+        desc="Enter the IP address shown in the IP Webcam Android app to pull its live MJPEG stream into the browser, then scan any frame for number plates using the same ANPR/OCR pipeline as Module 01." />
+
+      <GlassCard className="p-4">
+        <form onSubmit={addFeed} className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="flex-1">
+            <label className="font-data mb-1 block text-[10px] uppercase tracking-widest text-slate-500">IP address</label>
+            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2.5">
+              <Signal size={15} className="text-slate-500" />
+              <input
+                value={ipInput}
+                onChange={(e) => setIpInput(e.target.value)}
+                placeholder="192.168.1.42"
+                className="font-data w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="w-full lg:w-28">
+            <label className="font-data mb-1 block text-[10px] uppercase tracking-widest text-slate-500">Port</label>
+            <input
+              value={portInput}
+              onChange={(e) => setPortInput(e.target.value)}
+              placeholder="8080"
+              className="font-data w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none"
+            />
+          </div>
+          <div className="w-full lg:w-32">
+            <label className="font-data mb-1 block text-[10px] uppercase tracking-widest text-slate-500">Stream path</label>
+            <input
+              value={pathInput}
+              onChange={(e) => setPathInput(e.target.value)}
+              placeholder="/video"
+              className="font-data w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none"
+            />
+          </div>
+          <div className="w-full lg:w-40">
+            <label className="font-data mb-1 block text-[10px] uppercase tracking-widest text-slate-500">Label (optional)</label>
+            <input
+              value={labelInput}
+              onChange={(e) => setLabelInput(e.target.value)}
+              placeholder="Front gate"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none"
+            />
+          </div>
+          <button type="submit"
+            className={`flex items-center justify-center gap-2 rounded-lg bg-${theme.c500} px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-${theme.c400}`}>
+            <Camera size={16} /> Add feed
+          </button>
+        </form>
+        {formError && <p className="mt-2 text-xs text-rose-400">{formError}</p>}
+        <p className="mt-2 text-[11px] text-slate-500">
+          Open the IP Webcam app on the phone, tap "Start server", and use the IP/port it shows under "IPv4" — this only works when the browser and the phone are on the same network.
+        </p>
+        <p className="mt-1 text-[11px] text-slate-500">
+          Each feed card has a <span className="text-slate-400">Scan now</span> button and an <span className="text-slate-400">Auto-scan</span> toggle that capture the current frame and send it to the same ANPR/OCR backend used in Module 01 (<span className="font-data">{API_BASE}/upload</span>) to detect and display the number plate. This requires <span className="font-data">server.py</span> to be running, and works best when the IP Webcam app's HTTP server allows cross-origin (CORS) access.
+        </p>
+      </GlassCard>
+
+      {feeds.length === 0 ? (
+        <GlassCard className="flex h-56 flex-col items-center justify-center gap-2 text-slate-500">
+          <Camera size={26} />
+          <p className="text-sm">No feeds added yet — enter an IP address above to view a live camera</p>
+        </GlassCard>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {feeds.map((feed) => (
+            <IPWebcamFeedCard key={feed.id} feed={feed} onRemove={removeFeed} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ======================================================================
    3. TRAJECTORY TRACKING
    ====================================================================== */
 
@@ -1881,6 +2222,7 @@ const NAV = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "gps", label: "Live GPS Map", icon: Navigation },
   { id: "anpr", label: "ANPR / OCR Engine", icon: ScanLine },
+  { id: "ipcam", label: "IP Webcam", icon: Camera },
   { id: "trajectory", label: "Trajectory Tracking", icon: Route },
   { id: "analytics", label: "Traffic Analytics", icon: Gauge },
   { id: "alerts", label: "Alert System", icon: Bell },
@@ -2181,6 +2523,7 @@ function App() {
             {section === "overview" && <Overview goTo={goTo} liveData={liveData} />}
             {section === "gps" && <GpsMapSection />}
             {section === "anpr" && <AnprModule />}
+            {section === "ipcam" && <IPWebcamModule />}
             {section === "trajectory" && <TrajectoryTracking query={trajQuery} setQuery={setTrajQuery} liveData={liveData} />}
             {section === "analytics" && <TrafficAnalytics liveData={liveData} />}
             {section === "alerts" && <AlertSystem onTrack={trackPlate} />}

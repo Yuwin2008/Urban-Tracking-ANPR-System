@@ -373,7 +373,7 @@ The repository currently contains the major components shown above, including th
 
 ---
 
-# ⚙️ Technologies Used
+#  Technologies Used
 
 | Technology              | Purpose                        |
 | ----------------------- | ------------------------------ |
@@ -393,7 +393,7 @@ The current `requirements.txt` specifies NumPy, OpenCV, Ultralytics, EasyOCR, Fl
 
 ---
 
-# 🚀 Installation
+#  Installation
 
 ## 1. Clone the repository
 
@@ -426,7 +426,7 @@ pip install -r requirements.txt
 
 ---
 
-# 📷 Configure Cameras
+#  Configure Cameras
 
 Edit:
 
@@ -454,7 +454,7 @@ The cameras should be reachable from the machine running the ANPR server.
 
 ---
 
-# ▶️ Running ANPR
+#  Running ANPR
 
 ## Single Image
 
@@ -490,7 +490,7 @@ Detected events are written to the multi-camera output directory.
 
 ---
 
-# 🌐 Running the Web Server
+#  Running the Web Server
 
 Start the Flask backend:
 
@@ -508,7 +508,7 @@ The backend serves the project website and exposes the ANPR processing functiona
 
 ---
 
-# 🧭 Route Tracking
+#  Route Tracking
 
 After collecting ANPR observations, the route tracker can reconstruct vehicle routes.
 
@@ -535,7 +535,7 @@ The route tracker can then generate an interactive Folium map containing camera 
 
 ---
 
-# 🔎 Querying Vehicle Trajectories
+#  Querying Vehicle Trajectories
 
 The trajectory engine allows a vehicle to be searched using its license plate.
 
@@ -554,7 +554,7 @@ It also supports optional start/end timestamps and fuzzy plate matching to handl
 
 ---
 
-# 📊 Example Workflow
+#  Example Workflow
 
 ```text
 Camera 1
@@ -602,22 +602,22 @@ Result:
 
 ---
 
-# 🎯 Use Cases
+#  Use Cases
 
 This architecture can be extended for:
 
-* 🚦 Urban traffic monitoring
-* 🅿️ Smart parking systems
-* 🛣️ Traffic flow analysis
-* 🚘 Vehicle journey analysis
-* 🏙️ Smart-city infrastructure
-* 🚨 Traffic-event investigation
-* 📊 Road utilization analytics
-* 🗺️ Multi-camera movement visualization
+*  Urban traffic monitoring
+*  Smart parking systems
+*  Traffic flow analysis
+*  Vehicle journey analysis
+*  Smart-city infrastructure
+*  Traffic-event investigation
+*  Road utilization analytics
+*  Multi-camera movement visualization
 
 ---
 
-# 🔮 Future Improvements
+#  Future Improvements
 
 Potential improvements include:
 
@@ -639,7 +639,7 @@ Potential improvements include:
 
 ---
 
-# 🧪 Limitations
+#  Limitations
 
 The current system is a prototype/research-oriented implementation.
 
@@ -659,7 +659,7 @@ The multi-camera implementation itself contains TODOs around live-feed speed, pe
 
 ---
 
-# 🔐 Privacy & Responsible Use
+#  Privacy & Responsible Use
 
 License plate information can constitute sensitive vehicle-related data depending on how and where the system is deployed.
 
@@ -674,7 +674,7 @@ When deploying this project in real environments:
 
 ---
 
-# 📜 License
+#  License
 
 This project is licensed under the **MIT License**.
 
@@ -682,13 +682,12 @@ See [`LICENSE`](LICENSE) for details.
 
 ---
 
-# 👨‍💻 Author
+#  Author
 
-**Yuwin2008**
-
-GitHub:
-
-https://github.com/Yuwin2008
+[!Yuwin2008](https://github.com/Yuwin2008)
+[!Waqar Ahamad Khan]()
+[!Sairaj Dilip Vernekar](https://github.com/sdv-chess)
+[!Diya Prince](https://github.com/diya25prince-tech)
 
 Project:
 
@@ -696,10 +695,10 @@ https://github.com/Yuwin2008/Urban-Tracking-ANPR-System
 
 ---
 
-# ⭐ Project Vision
+#  Project Vision
 
 > **From detecting vehicles to understanding how they move through a city.**
 
 Urban-Tracking-ANPR-System aims to provide a foundation for building intelligent, scalable, multi-camera traffic analytics systems where individual ANPR detections become part of a larger picture of urban vehicle movement.
 
-If you find the project useful, consider giving it a ⭐ on GitHub.
+If you find the project useful, consider giving it a star on GitHub.

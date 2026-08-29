@@ -53,7 +53,7 @@ LOG_FLUSH_METRICS_EVERY_N = 100
 LOG_EVERY_N_CYCLES = 30
 
 CAMERAS = {
-    "CAM_01": "http://10.200.197.70:8080/video",
+    "CAM_01": "http://10.200.126.237:8080/video",
     # "CAM_02": "http://10.200.197.195:8080/video",
     # "CAM_03": "http://10.200.195.67:8080/video",
 }
@@ -246,13 +246,28 @@ captures = {}
 camera_buffers = {}
 camera_last_frame_id = {}
 stop_event = threading.Event()
-SCREEN_WIDTH = ctypes.windll.user32.GetSystemMetrics(0)
-SCREEN_HEIGHT = ctypes.windll.user32.GetSystemMetrics(1)
+
+
+def get_screen_size() -> "tuple[int, int]":
+    """Cross-platform screen size lookup. ctypes.windll only exists on
+    Windows, so this falls back to tkinter (bundled with Python, works on
+    macOS/Linux too) and finally to a hardcoded guess if even that fails
+    (e.g. no display attached)."""
+    if hasattr(ctypes, "windll"):
+        return ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1)
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()
+        w, h = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.destroy()
+        return w, h
+    except Exception:
+        return 1920, 1080
+
+
+SCREEN_WIDTH, SCREEN_HEIGHT = get_screen_size()
 ACTIVE_WINDOW = None
-
-
-def get_screen_size() -> tuple[int, int]:
-    return ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1)
 
 
 def tile_windows(camera_ids):
@@ -315,7 +330,34 @@ print()
 
 events = []
 plate_counter = 0
-ocr_pool = OCRWorkerPool(num_workers=3, lang="en")
+# 3 concurrent PaddleOCR workers is heavy on a CPU-only machine (no GPU) —
+# they compete with the camera capture thread and the cv2.imshow display
+# loop for CPU time, which is what makes the preview window feel laggy.
+# 1 worker keeps OCR running without starving the live preview.
+ocr_pool = OCRWorkerPool(num_workers=1, lang="en")
+
+# --- Live JSON flush ---------------------------------------------------
+# Previously events.json was only written once, after the loop exited
+# (i.e. only after pressing Q). That meant the website had nothing to
+# read while the camera script was actually running. Instead, flush to
+# disk every SAVE_INTERVAL_SECONDS while events are coming in, using a
+# write-to-temp-then-rename so the website never reads a half-written file.
+SAVE_INTERVAL_SECONDS = 2.0
+last_save_ts = 0.0
+
+
+def save_events():
+    output = {
+        "system": "Multi-Camera ANPR",
+        "created_at": datetime.now().isoformat(timespec="milliseconds"),
+        "camera_count": len(captures),
+        "total_events": len(events),
+        "events": events,
+    }
+    tmp_path = JSON_PATH.with_suffix(".json.tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=4)
+    tmp_path.replace(JSON_PATH)
 
 onFrameVsCamera = {camera_id: 0 for camera_id in captures}
 per_camera_skip = {camera_id: 1 for camera_id in captures}
@@ -537,11 +579,17 @@ try:
                             "detection_confidence": float(det["det_conf"]),
                             "ocr_confidence": float(det["ocr_conf"]),
                             "bounding_box": {"x1": int(det["bbox"][0]), "y1": int(det["bbox"][1]), "x2": int(det["bbox"][2]), "y2": int(det["bbox"][3])},
-                            "crop": str(crop_path),
+                            # forward-slash always, so it works as a URL on the website even when this runs on Windows
+                            "crop": crop_path.as_posix(),
                         }
                         events.append(event)
                         if per_camera_cycle[camera_id] % LOG_EVERY_N_CYCLES == 0:
                             print(f"[{det['ts']}] [{camera_id}] {det['text']} | DET {det['det_conf']:.3f} | OCR {det['ocr_conf']:.3f}")
+
+                        now_save = time.time()
+                        if now_save - last_save_ts >= SAVE_INTERVAL_SECONDS:
+                            save_events()
+                            last_save_ts = now_save
 
                 cached_detections[camera_id] = current_detections
                 ocr_track_cache[camera_id] = next_tracks
@@ -588,16 +636,7 @@ finally:
         print(f"[{camera_id}] Released")
     cv2.destroyAllWindows()
 
-output = {
-    "system": "Multi-Camera ANPR",
-    "created_at": datetime.now().isoformat(timespec="milliseconds"),
-    "camera_count": len(captures),
-    "total_events": len(events),
-    "events": events
-}
-
-with open(JSON_PATH, "w", encoding="utf-8") as f:
-    json.dump(output, f, indent=4)
+save_events()
 
 print()
 print("==============================")

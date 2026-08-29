@@ -35,11 +35,9 @@ The resulting data can be visualized as an interactive trajectory on a map.
 *  **Interactive Trajectory Maps**
 *  **Time-Ordered Vehicle Movement**
 *  **Exact and Fuzzy Plate Searching**
-*  **Trajectory Anomaly Detection**
-*  **Web-Based Dashboard**
+*   **Web-Based Dashboard**
 *  **Flask API**
 *  **JSON-Based Event and Detection Storage**
-*  **Frame skipping and OCR caching for live streams**
 
 ---
 

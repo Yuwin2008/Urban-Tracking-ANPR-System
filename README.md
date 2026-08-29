@@ -1,5 +1,15 @@
 #  Urban Tracking ANPR System
 
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![YOLO](https://img.shields.io/badge/YOLO-Ultralytics-111F68?logo=yolo&logoColor=white)](https://github.com/ultralytics/ultralytics)
+[![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
+[![PaddleOCR](https://img.shields.io/badge/PaddleOCR-OCR-00A67E)](https://github.com/PaddlePaddle/PaddleOCR)
+[![EasyOCR](https://img.shields.io/badge/EasyOCR-OCR-FF6F00)](https://github.com/JaidedAI/EasyOCR)
+[![Flask](https://img.shields.io/badge/Flask-Backend-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![Folium](https://img.shields.io/badge/Folium-Maps-77B829)](https://python-visualization.github.io/folium/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/Yuwin2008/Urban-Tracking-ANPR-System?style=flat&logo=github)](https://github.com/Yuwin2008/Urban-Tracking-ANPR-System/stargazers)
+
 ### AI-Powered Multi-Camera Automatic Number Plate Recognition & Vehicle Trajectory Tracking
 
 An intelligent **urban traffic monitoring system** that combines **Automatic Number Plate Recognition (ANPR)**, **multi-camera vehicle tracking**, **OCR**, **GPS-based camera localization**, and **trajectory reconstruction** to track vehicles across a network of cameras.

@@ -9,6 +9,16 @@ GPS_FILE = "camera_locations.json"
 HISTORY_FILE = "camera_history.json"
 
 
+@app.after_request
+def add_cors_headers(response):
+    # Allows the dashboard (index.html), which is opened from a different
+    # origin (file:// or another port), to fetch /gps and /gps/history.
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
 def load_json(filename, default):
     if not os.path.exists(filename):
         return default
@@ -117,15 +127,27 @@ if __name__ == "__main__":
 
     print()
     print("Latest GPS:")
-    print("http://10.200.195.29:5000/gps")
+    print("http://10.200.127.26:5000/gps")
 
     print()
     print("All GPS history:")
-    print("http://10.200.195.29:5000/gps/history")
+    print("http://10.200.127.26:5000/gps/history")
 
     print()
     print("CAM_01 history:")
-    print("http://10.200.195.29:5000/gps/history/CAM_01")
+    print("http://10.200.127.26:5000/gps/history/CAM_01")
+
+    print()
+    print("CAM_02 history:")
+    print("http://10.200.127.26:5000/gps/history/CAM_02")
+
+    print()
+    print("CAM_03 history:")
+    print("http://10.200.127.26:5000/gps/history/CAM_03")
+
+    print()
+    print("CAM_04 history:")
+    print("http://10.200.127.26:5000/gps/history/CAM_04")
 
     print()
     print("Server running...")

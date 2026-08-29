@@ -1292,12 +1292,23 @@ function AboutTeam() {
       </GlassCard>
 
       <GlassCard className="flex flex-wrap items-center justify-between gap-3 p-5">
-        <span className="text-xs text-slate-500">Contact / links — placeholders, update before submission.</span>
+        <span className="text-xs text-slate-500">Contact / links</span>
         <div className="flex gap-2">
-          {[Github, Linkedin, Mail].map((Icon, i) => (
-            <div key={i} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-800 text-slate-500">
-              <Icon size={14} />
-            </div>
+          {[
+            { Icon: Github, href: "https://github.com/Yuwin2008/Urban-Tracking-ANPR-System" },
+            { Icon: Linkedin, href: null },
+            { Icon: Mail, href: "mailto:sairajvernekar@yahoo.com" },
+          ].map(({ Icon, href }, i) => (
+            href ? (
+              <a key={i} href={href} target="_blank" rel="noopener noreferrer"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-800 text-slate-500 transition hover:border-slate-600 hover:text-slate-300">
+                <Icon size={14} />
+              </a>
+            ) : (
+              <div key={i} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-800 text-slate-500">
+                <Icon size={14} />
+              </div>
+            )
           ))}
         </div>
       </GlassCard>

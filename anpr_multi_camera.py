@@ -1,48 +1,61 @@
+import ctypes
+import hashlib
+import json
+import math
 import os
+import queue
+import re
+import threading
 import time
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
 
 # Paddle/PIR compatibility
 os.environ["FLAGS_enable_pir_api"] = "0"
-import cv2
-import json
-import re
-import hashlib
-from datetime import datetime
-from pathlib import Path
-from ultralytics import YOLO
-from paddleocr import PaddleOCR
 
-#TODO: somehow speed up live feed
-#TODO: add per-camera frame rate control
-#TODO: Bent plates are harder to detect for model currently
-#TODO: Plates that extend to multiple lines (like on motorcycles) are harder to detect for model currently (only flags as a plate, but doesnt read its number)
+import cv2
+from paddleocr import PaddleOCR
+from ultralytics import YOLO
+
+# Priority markers:
+# P1 - Capture thread + OCR worker pool (eliminates UI freeze)
+# P2 - Position-aware Indian plate correction
+# P3 - Crop padding/upscaling + preprocessing
+# P4 - Multi-sample voting
+# P5 - GPU/device check opportunities
+
+# TODO: somehow speed up live feed
+# TODO: add per-camera frame rate control
+# TODO: Bent plates are harder to detect for model currently
+# TODO: Plates that extend to multiple lines (like on motorcycles) are harder to detect for model currently (only flags as a plate, but doesnt read its number)
 
 CONF_THRESHOLD = 0.25
 YOLO_IMAGE_SIZE = 300
-FRAME_SKIP_MAX = 29  # Per-camera capped random skip [1..FRAME_SKIP_MAX]
+FRAME_SKIP_MAX = 29
 
 # OCR/tracking reuse controls
 OCR_REUSE_SECONDS = 1.0
-OCR_HIGH_CONF_MIN = 0.85
+OCR_HIGH_CONF_MIN = 0.6
 TRACK_MATCH_IOU = 0.45
 OCR_MIN_DET_CONF = 0.40
 OCR_MAX_CROP_WIDTH = 320
+OCR_MIN_CROP_WIDTH = 200
 
-# Frame flush controls (security-sensitive, fully tweakable)
-ENABLE_FRAME_FLUSH = True
+# Legacy flush controls kept as no-op compatibility; capture is now worker-thread based.
+ENABLE_FRAME_FLUSH = False
 FLUSH_FRAMES_PER_CYCLE = 2
-FLUSH_ONLY_WHEN_LAGGING = True
+FLUSH_ONLY_WHEN_LAGGING = False
 MAX_FRAME_AGE_MS = 250
 MAX_CONSECUTIVE_FLUSH = 5
 LOG_FLUSH_METRICS_EVERY_N = 100
 
-# Logging controls
 LOG_EVERY_N_CYCLES = 30
 
 CAMERAS = {
-    "CAM_01": "http://10.200.195.38:8080/video",
-    "CAM_02": "http://10.200.195.44:8080/video",
-    "CAM_03": "http://10.200.195.67:8080/video",
+    "CAM_01": "http://10.200.197.70:8080/video",
+    # "CAM_02": "http://10.200.197.195:8080/video",
+    # "CAM_03": "http://10.200.195.67:8080/video",
 }
 
 YOLO_MODEL = "model/plate_detector.pt"
@@ -63,7 +76,205 @@ print("Loading PaddleOCR")
 ocr = PaddleOCR(lang="en", enable_mkldnn=False)
 print("Models Loaded")
 
+# P1 - Non-blocking capture buffer
+class LatestFrameBuffer:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._frame = None
+        self._frame_id = 0
+
+    def update(self, frame):
+        with self._lock:
+            self._frame = frame
+            self._frame_id += 1
+
+    def get(self):
+        with self._lock:
+            return self._frame, self._frame_id
+
+
+def capture_worker(camera_id: str, cap, buffer: LatestFrameBuffer, stop_event: threading.Event):
+    while not stop_event.is_set():
+        ret, frame = cap.read()
+        if not ret:
+            time.sleep(0.01)
+            continue
+        buffer.update(frame)
+
+
+# P1 - OCR worker pool, one PaddleOCR instance per worker
+class OCRWorkerPool:
+    def __init__(self, num_workers=3, lang="en"):
+        self.task_queue = queue.Queue(maxsize=64)
+        self.result_queue = queue.Queue(maxsize=256)
+        self._workers = []
+        for _ in range(num_workers):
+            ocr_instance = PaddleOCR(lang=lang, enable_mkldnn=False)
+            worker = threading.Thread(target=self._worker_loop, args=(ocr_instance,), daemon=True)
+            worker.start()
+            self._workers.append(worker)
+
+    def _worker_loop(self, ocr_instance):
+        while True:
+            task = self.task_queue.get()
+            if task is None:
+                break
+            track_id, camera_id, crop = task
+            try:
+                results = ocr_instance.predict(crop)
+                text, conf = self._extract(results)
+            except Exception:
+                text, conf = "", 0.0
+            self.result_queue.put((track_id, camera_id, text, conf))
+
+    @staticmethod
+    def _extract(ocr_results):
+        for result in ocr_results or []:
+            texts = result.get("rec_texts", [])
+            scores = result.get("rec_scores", [])
+            if texts:
+                return str(texts[0]).upper(), float(scores[0]) if scores else 0.0
+        return "", 0.0
+
+    def submit(self, track_id, camera_id, crop):
+        try:
+            self.task_queue.put_nowait((track_id, camera_id, crop))
+        except queue.Full:
+            pass
+
+    def poll_results(self):
+        results = []
+        while not self.result_queue.empty():
+            results.append(self.result_queue.get_nowait())
+        return results
+
+    def stop(self):
+        for _ in self._workers:
+            self.task_queue.put_nowait(None)
+
+
+# P3 - Crop normalization helpers
+
+def pad_bbox(x1, y1, x2, y2, w, h, pad_frac=0.08):
+    pad_x = int((x2 - x1) * pad_frac)
+    pad_y = int((y2 - y1) * pad_frac)
+    return max(0, x1 - pad_x), max(0, y1 - pad_y), min(w, x2 + pad_x), min(h, y2 + pad_y)
+
+
+def normalize_plate_size(plate, min_width=OCR_MIN_CROP_WIDTH, max_width=OCR_MAX_CROP_WIDTH):
+    h, w = plate.shape[:2]
+    if w < min_width:
+        scale = min_width / float(w)
+        return cv2.resize(plate, (min_width, max(1, int(h * scale))), interpolation=cv2.INTER_CUBIC)
+    if w > max_width:
+        scale = max_width / float(w)
+        return cv2.resize(plate, (max_width, max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+    return plate
+
+
+def apply_crop_preprocessing(plate):
+    if plate is None or plate.size == 0:
+        return plate
+    gray = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY) if len(plate.shape) == 3 else plate
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    gray = clahe.apply(gray)
+    sharpen = cv2.GaussianBlur(gray, (0, 0), 1.5)
+    sharpen = cv2.addWeighted(gray, 1.7, sharpen, -0.5, 0)
+    return cv2.cvtColor(sharpen, cv2.COLOR_GRAY2BGR) if len(plate.shape) == 3 else sharpen
+
+
+def downscale_plate_if_needed(plate):
+    h, w = plate.shape[:2]
+    if w <= OCR_MAX_CROP_WIDTH:
+        return plate
+    scale = OCR_MAX_CROP_WIDTH / float(w)
+    new_w = OCR_MAX_CROP_WIDTH
+    new_h = max(1, int(h * scale))
+    return cv2.resize(plate, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+
+# P2 - format-aware Indian plate correction
+INDIAN_STATE_CODES = {
+    "AP", "AR", "AS", "BR", "CG", "CH", "DD", "DL", "DN", "GA", "GJ", "HR", "HP", "JH", "JK",
+    "KA", "KL", "LA", "LD", "MH", "ML", "MN", "MP", "MZ", "NL", "OD", "PB", "PY", "RJ", "SK",
+    "TN", "TR", "TS", "UK", "UP", "WB", "AN"
+}
+LETTER_TO_DIGIT = {"O": "0", "Q": "0", "D": "0", "I": "1", "L": "1", "J": "1", "Z": "2", "S": "5", "B": "8", "G": "6", "A": "4"}
+DIGIT_TO_LETTER = {"0": "O", "1": "I", "2": "Z", "5": "S", "8": "B", "6": "G", "4": "A"}
+
+
+def correct_plate(raw_text: str) -> str:
+    text = (raw_text or "").strip().upper()
+    text = re.sub(r"[^A-Z0-9]", "", text)
+    if not (9 <= len(text) <= 10):
+        return text
+
+    chars = list(text)
+    for i in range(len(chars) - 4, len(chars)):
+        chars[i] = LETTER_TO_DIGIT.get(chars[i], chars[i])
+    for i in range(0, 2):
+        chars[i] = DIGIT_TO_LETTER.get(chars[i], chars[i])
+    for i in range(2, 4):
+        chars[i] = LETTER_TO_DIGIT.get(chars[i], chars[i])
+    for i in range(4, len(chars) - 4):
+        chars[i] = DIGIT_TO_LETTER.get(chars[i], chars[i])
+
+    corrected = "".join(chars)
+    state = corrected[:2]
+    if state not in INDIAN_STATE_CODES:
+        best = min(INDIAN_STATE_CODES, key=lambda c: sum(a != b for a, b in zip(c, state)))
+        if sum(a != b for a, b in zip(best, state)) <= 1:
+            corrected = best + corrected[2:]
+    return corrected
+
+
+# P4 - multi-sample voting
+
+def vote_plate_text(samples):
+    if not samples:
+        return ""
+    target_len = Counter(len(text) for text, _ in samples).most_common(1)[0][0]
+    filtered = [(text, conf) for text, conf in samples if len(text) == target_len]
+    if not filtered:
+        filtered = samples
+    if not filtered:
+        return ""
+    return "".join(Counter(text[i] for text, _ in filtered).most_common(1)[0][0] for i in range(target_len))
+
+
 captures = {}
+camera_buffers = {}
+camera_last_frame_id = {}
+stop_event = threading.Event()
+SCREEN_WIDTH = ctypes.windll.user32.GetSystemMetrics(0)
+SCREEN_HEIGHT = ctypes.windll.user32.GetSystemMetrics(1)
+ACTIVE_WINDOW = None
+
+
+def get_screen_size() -> tuple[int, int]:
+    return ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1)
+
+
+def tile_windows(camera_ids):
+    if not camera_ids:
+        return
+    count = len(camera_ids)
+    cols = max(1, math.ceil(math.sqrt(count)))
+    rows = max(1, math.ceil(count / cols))
+    margin = 10
+    available_w = max(1, SCREEN_WIDTH - (margin * 2))
+    available_h = max(1, SCREEN_HEIGHT - (margin * 2))
+    cell_w = max(1, available_w // cols)
+    cell_h = max(1, available_h // rows)
+
+    for idx, camera_id in enumerate(camera_ids):
+        row, col = divmod(idx, cols)
+        x = margin + col * cell_w
+        y = margin + row * cell_h
+        cv2.namedWindow(camera_id, cv2.WINDOW_NORMAL)
+        cv2.moveWindow(camera_id, x, y)
+        cv2.resizeWindow(camera_id, cell_w, cell_h)
+
 
 print()
 print("==============================")
@@ -73,19 +284,26 @@ print("==============================")
 for camera_id, url in CAMERAS.items():
     print()
     print(f"[{camera_id}] Connecting...")
-
     cap = cv2.VideoCapture(url)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not cap.isOpened():
         print(f"[{camera_id}] ERROR: Could not connect")
         continue
-
     captures[camera_id] = cap
+    camera_buffers[camera_id] = LatestFrameBuffer()
+    worker = threading.Thread(target=capture_worker, args=(camera_id, cap, camera_buffers[camera_id], stop_event), daemon=True)
+    worker.start()
     print(f"[{camera_id}] Connected")
 
 if len(captures) == 0:
     print("ERROR: No cameras connected.")
     exit()
+
+for camera_id in captures:
+    cv2.namedWindow(camera_id, cv2.WINDOW_NORMAL)
+
+tile_windows(list(captures.keys()))
+ACTIVE_WINDOW = next(iter(captures), None)
 
 print()
 print("==============================")
@@ -97,6 +315,7 @@ print()
 
 events = []
 plate_counter = 0
+ocr_pool = OCRWorkerPool(num_workers=3, lang="en")
 
 onFrameVsCamera = {camera_id: 0 for camera_id in captures}
 per_camera_skip = {camera_id: 1 for camera_id in captures}
@@ -104,6 +323,7 @@ per_camera_cycle = {camera_id: 0 for camera_id in captures}
 
 cached_detections = {cam_id: [] for cam_id in captures}
 ocr_track_cache = {cam_id: [] for cam_id in captures}
+ocr_vote_cache = {cam_id: {} for cam_id in captures}
 camera_metrics = {
     cam_id: {
         "frames_read": 0,
@@ -154,59 +374,17 @@ def downscale_plate_if_needed(plate):
     return cv2.resize(plate, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
 
-def capture_latest_frame(cap, camera_id, metrics):
-    ret, frame = cap.read()
-    if not ret:
-        return False, None
-
-    metrics[camera_id]["frames_read"] += 1
-
-    if not ENABLE_FRAME_FLUSH:
-        return True, frame
-
-    should_flush = True
-    if FLUSH_ONLY_WHEN_LAGGING:
-        # OpenCV doesn't provide reliable frame-age everywhere; use read slowness heuristic
-        # and keep this config-driven via FLUSH_ONLY_WHEN_LAGGING.
-        should_flush = True
-
-    if not should_flush:
-        metrics[camera_id]["consecutive_flushes"] = 0
-        return True, frame
-
-    flushed_now = 0
-    flush_budget = min(FLUSH_FRAMES_PER_CYCLE, MAX_CONSECUTIVE_FLUSH)
-
-    for _ in range(flush_budget):
-        ok = cap.grab()
-        if not ok:
-            break
-        ok2, latest = cap.retrieve()
-        if not ok2:
-            break
-        frame = latest
-        flushed_now += 1
-
-    metrics[camera_id]["frames_flushed"] += flushed_now
-    if flushed_now > 0:
-        metrics[camera_id]["consecutive_flushes"] += 1
-    else:
-        metrics[camera_id]["consecutive_flushes"] = 0
-
-    if metrics[camera_id]["consecutive_flushes"] > MAX_CONSECUTIVE_FLUSH:
-        metrics[camera_id]["consecutive_flushes"] = 0  # hard safety reset
-
-    return True, frame
-
-
 try:
     while True:
         for camera_id, cap in captures.items():
-            ret, frame = capture_latest_frame(cap, camera_id, camera_metrics)
-            if not ret:
-                if per_camera_cycle[camera_id] % LOG_EVERY_N_CYCLES == 0:
-                    print(f"\n[{camera_id}] Failed to read frame")
+            buffer = camera_buffers[camera_id]
+            frame, frame_id = buffer.get()
+            if frame is None:
                 continue
+            if frame_id == camera_last_frame_id.get(camera_id, -1):
+                continue
+            camera_last_frame_id[camera_id] = frame_id
+            camera_metrics[camera_id]["frames_read"] += 1
 
             if onFrameVsCamera[camera_id] >= per_camera_skip[camera_id]:
                 onFrameVsCamera[camera_id] = 0
@@ -216,6 +394,7 @@ try:
                 )
 
                 current_detections = []
+                next_tracks = []
                 now_ts = time.time()
 
                 results = detector.predict(
@@ -229,7 +408,6 @@ try:
 
                 detection_count = len(result.boxes) if result.boxes is not None else 0
                 prev_tracks = ocr_track_cache[camera_id]
-                next_tracks = []
 
                 if detection_count > 0 and per_camera_cycle[camera_id] % LOG_EVERY_N_CYCLES == 0:
                     print(f"\n[{camera_id}] Detections: {detection_count}")
@@ -238,7 +416,6 @@ try:
                     detection_confidence = float(box.conf[0].cpu().item())
                     coords = box.xyxy[0].cpu().numpy().astype(int)
                     x1, y1, x2, y2 = coords
-
                     h, w = frame.shape[:2]
                     x1 = max(0, min(x1, w - 1))
                     y1 = max(0, min(y1, h - 1))
@@ -262,12 +439,12 @@ try:
 
                     plate_text = ""
                     ocr_confidence = 0.0
+                    ocr_job_id = None
 
                     track_age = 0.0
                     if matched_track is not None:
                         track_age = now_ts - matched_track["first_seen_ts"]
 
-                    # Corrected logic: reuse only after track has existed long enough with high confidence
                     can_reuse_high_conf = (
                         matched_track is not None
                         and best_iou >= TRACK_MATCH_IOU
@@ -281,38 +458,32 @@ try:
                         ocr_confidence = matched_track["ocr_conf"]
                         camera_metrics[camera_id]["ocr_skips"] += 1
                     elif detection_confidence < OCR_MIN_DET_CONF:
-                        # Skip OCR on weak detections to cut cost
                         plate_text = ""
                         ocr_confidence = 0.0
                     else:
-                        plate_for_ocr = downscale_plate_if_needed(plate)
-                        try:
-                            ocr_results = ocr.predict(plate_for_ocr)
-                            camera_metrics[camera_id]["ocr_calls"] += 1
-                        except Exception as e:
-                            if per_camera_cycle[camera_id] % LOG_EVERY_N_CYCLES == 0:
-                                print(f"OCR error: {e}")
+                        x1_pad, y1_pad, x2_pad, y2_pad = pad_bbox(x1, y1, x2, y2, w, h, pad_frac=0.08)
+                        plate = frame[y1_pad:y2_pad, x1_pad:x2_pad]
+                        if plate.size == 0:
                             continue
-
-                        for ocr_result in ocr_results:
-                            texts = ocr_result.get("rec_texts", [])
-                            scores = ocr_result.get("rec_scores", [])
-                            if len(texts) > 0:
-                                plate_text = str(texts[0]).upper()
-                                if len(scores) > 0:
-                                    ocr_confidence = float(scores[0])
-                                break
+                        plate = normalize_plate_size(apply_crop_preprocessing(plate))
+                        plate = downscale_plate_if_needed(plate)
+                        ocr_job_id = f"{camera_id}:{time.time_ns()}"
+                        ocr_pool.submit(ocr_job_id, camera_id, plate)
+                        camera_metrics[camera_id]["ocr_calls"] += 1
 
                     plate_text = re.sub(r"[^A-Z0-9]", "", plate_text)
                     now = datetime.now()
                     timestamp = now.isoformat(timespec="milliseconds")
 
-                    current_detections.append({
+                    det_entry = {
                         "bbox": (x1, y1, x2, y2),
                         "text": plate_text,
                         "det_conf": detection_confidence,
-                        "ocr_conf": ocr_confidence
-                    })
+                        "ocr_conf": ocr_confidence,
+                        "ocr_job_id": ocr_job_id,
+                        "ts": timestamp,
+                    }
+                    current_detections.append(det_entry)
 
                     first_seen_ts = now_ts
                     if matched_track is not None and best_iou >= TRACK_MATCH_IOU:
@@ -322,32 +493,55 @@ try:
                         "bbox": (x1, y1, x2, y2),
                         "text": plate_text,
                         "ocr_conf": ocr_confidence,
+                        "ocr_job_id": ocr_job_id,
                         "first_seen_ts": first_seen_ts,
-                        "last_seen_ts": now_ts
+                        "last_seen_ts": now_ts,
+                        "vote_samples": [(plate_text, ocr_confidence)] if plate_text else [],
                     })
 
-                    if plate_text:
-                        plate_counter += 1
-                        crop_name = f"{camera_id}_{plate_counter:05d}_{plate_text}.jpg"
-                        crop_path = CROPS_DIR / crop_name
-                        cv2.imwrite(str(crop_path), plate)
+                for job_id, job_camera, ocr_text, ocr_conf in ocr_pool.poll_results():
+                    if job_camera != camera_id:
+                        continue
+                    refined_text = correct_plate(ocr_text) if ocr_text else ""
+                    refined_conf = float(ocr_conf)
+                    for det in current_detections:
+                        if det.get("ocr_job_id") == job_id:
+                            det["text"] = refined_text
+                            det["ocr_conf"] = refined_conf
+                    for track in next_tracks:
+                        if track.get("ocr_job_id") == job_id:
+                            track["text"] = refined_text
+                            track["ocr_conf"] = refined_conf
+                            track["vote_samples"] = (track.get("vote_samples") or []) + [(refined_text, refined_conf)]
+                            if len(track["vote_samples"]) > 5:
+                                track["vote_samples"] = track["vote_samples"][-5:]
+                            track["text"] = vote_plate_text(track["vote_samples"]) if track["vote_samples"] else refined_text
 
+                for det in current_detections:
+                    text = det["text"]
+                    if not text:
+                        continue
+                    det["text"] = re.sub(r"[^A-Z0-9]", "", text)
+                    det["ocr_conf"] = float(det.get("ocr_conf", 0.0))
+                    if det["text"]:
+                        plate_counter += 1
+                        crop_name = f"{camera_id}_{plate_counter:05d}_{det['text']}.jpg"
+                        crop_path = CROPS_DIR / crop_name
+                        plate_crop = frame[int(det["bbox"][1]):int(det["bbox"][3]), int(det["bbox"][0]):int(det["bbox"][2])]
+                        if plate_crop.size > 0:
+                            cv2.imwrite(str(crop_path), plate_crop)
                         event = {
                             "camera_id": camera_id,
-                            "plate": plate_text,
-                            "timestamp": timestamp,
-                            "detection_confidence": float(detection_confidence),
-                            "ocr_confidence": float(ocr_confidence),
-                            "bounding_box": {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
-                            "crop": str(crop_path)
+                            "plate": det["text"],
+                            "timestamp": det["ts"],
+                            "detection_confidence": float(det["det_conf"]),
+                            "ocr_confidence": float(det["ocr_conf"]),
+                            "bounding_box": {"x1": int(det["bbox"][0]), "y1": int(det["bbox"][1]), "x2": int(det["bbox"][2]), "y2": int(det["bbox"][3])},
+                            "crop": str(crop_path),
                         }
                         events.append(event)
-
                         if per_camera_cycle[camera_id] % LOG_EVERY_N_CYCLES == 0:
-                            print(
-                                f"[{timestamp}] [{camera_id}] {plate_text} | "
-                                f"DET {detection_confidence:.3f} | OCR {ocr_confidence:.3f}"
-                            )
+                            print(f"[{det['ts']}] [{camera_id}] {det['text']} | DET {det['det_conf']:.3f} | OCR {det['ocr_conf']:.3f}")
 
                 cached_detections[camera_id] = current_detections
                 ocr_track_cache[camera_id] = next_tracks
@@ -386,6 +580,8 @@ try:
             break
 
 finally:
+    stop_event.set()
+    ocr_pool.stop()
     print("\nStopping cameras...")
     for camera_id, cap in captures.items():
         cap.release()

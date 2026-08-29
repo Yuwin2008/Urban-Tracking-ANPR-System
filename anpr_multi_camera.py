@@ -51,7 +51,7 @@ LOG_EVERY_N_CYCLES = 30
 
 CAMERAS = { #Apparently even the second set of numbers can change. (depends on the wifi i think)
     # "CAM_01": "http://10.200.197.70:8080/video",
-    "CAM_02": "http://10.240.95.89:8080/video",
+    "CAM_02": "http://10.200.127.27:8080/video",
     # "CAM_03": "http://10.200.195.67:8080/video",
 }
 
@@ -273,53 +273,108 @@ def bootDependencies():
     print("Models Loaded")
 
     return yolo, paddleOCR, {}, {}, {}, threading.Event(), ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1)
-def bootCameras(cameraBuffers, videoCaptures, SCREEN_WIDTH, SCREEN_HEIGHT, stopEvent):
-    print()
+def bootCameras(cameraBuffers, videoCaptures,
+                SCREEN_WIDTH, SCREEN_HEIGHT, stopEvent):
     dashes = "=============================="
-    space = " "*6
-    print(f"{dashes} \n{space} Starting Cameras {space} \n{dashes}")
+    space = " "*7
+    print(f"\n{dashes} \n{space}Starting Cameras{space} \n{dashes}")
 
     videoCapture = None
     workerThread = None
+    connectedCameras = set()
+    workers = {}
+    disconnectEvents = {}
+    failCounts = {}
     for camera_id, url in CAMERAS.items():
-        print()
-        print(f"[{camera_id}] Connecting...")
-        videoCapture = cv2.VideoCapture(url)
-        videoCapture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if not videoCapture.isOpened():
-            print(f"[{camera_id}] ERROR: Could not connect")
-            continue
-        videoCaptures[camera_id] = videoCapture
-        cameraBuffers[camera_id] = LatestFrameBuffer()
-        workerThread = threading.Thread(target=capture_worker, args=(camera_id, videoCapture, cameraBuffers[camera_id], stopEvent), daemon=True)
-        workerThread.start()
-        print(f"[{camera_id}] Connected")
-    if len(videoCaptures) == 0:
-        print("ERROR: No cameras connected.")
-        exit()
-    for camera_id in videoCaptures:
-        cv2.namedWindow(camera_id, cv2.WINDOW_NORMAL)
+        disconnectEvents[camera_id] = threading.Event()
+        if connectCamera(camera_id, url, videoCaptures, cameraBuffers, stopEvent, workers, failCounts, disconnectEvents):
+            connectedCameras.add(camera_id)
 
     tile_windows(list(videoCaptures.keys()), SCREEN_WIDTH, SCREEN_HEIGHT)
     activeWindow = next(iter(videoCaptures), None)
 
-    print()
-    print("==============================")
-    print("Multi-Camera ANPR Started")
-    print("==============================")
-    print()
-    print("Press Q to stop")
-    print()
     if videoCapture is None:
-        raise InvalidVideoFeedback("ERROR: No cameras connected.") #TODO: Make this error more verbose
+        raise InvalidVideoFeedback("ERROR: No cameras connected, cap is None") #TODO: Make this error more verbose
     if workerThread is None:
         raise InvalidWorkerThreading("ERROR: No worker threads started.") #TODO: Make this error more verbose
+    print(f"\n{dashes}  Multi-Camera ANPR Booted  \n{dashes}")
+    print("Press Q to stop\n")
 
-    return videoCapture, workerThread, activeWindow, cameraBuffers, videoCaptures
+    return (videoCapture, workerThread, activeWindow, cameraBuffers, videoCaptures,
+            workers, failCounts, disconnectEvents, connectedCameras)
+
+def connectCamera(cameraId, url, videoCapturesMap, cameraBuffersMap,
+                  stopEvent, workers, failCountMap, disconnectEvents):
+    print(f"[{cameraId}] Connecting...")
+    videoCapture = cv2.VideoCapture(url)
+    videoCapture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    if not videoCapture.isOpened():
+        print(f"[{cameraId}] ERROR: Could not connect")
+        videoCapture.release()
+        return False
+
+    videoCapturesMap[cameraId] = videoCapture
+    cameraBuffersMap[cameraId] = LatestFrameBuffer()
+    failCountMap[cameraId] = 0
+
+    worker = threading.Thread(
+        target=getWorker,
+        args=(cameraId, videoCapture, cameraBuffersMap[cameraId], stopEvent, disconnectEvents, failCountMap),
+        daemon=True
+    )
+    worker.start()
+    workers[cameraId] = worker
+
+    cv2.namedWindow(cameraId, cv2.WINDOW_NORMAL)
+    print(f"[{cameraId}] Connected")
+    return True
+def disconnectCamera(cameraId, videoCaptures, workers):
+    cap = videoCaptures.pop(cameraId, None)
+    if cap is not None:
+        cap.release()
+    workers.pop(cameraId, None)
+    try:
+        cv2.destroyWindow(cameraId)
+    except cv2.error:
+        pass
+    print(f"[{cameraId}] Disconnected")
+def getWorker(camera_id, cap, buffer, stop_event, disconnect_event, fail_counts):
+    while not stop_event.is_set():
+        ret, frame = cap.read()
+        if ret:
+            fail_counts[camera_id] = 0
+            buffer.update(frame)
+            continue
+
+        fail_counts[camera_id] = fail_counts.get(camera_id, 0) + 1
+        if fail_counts[camera_id] >= MAX_CONSECUTIVE_READ_FAILURES:
+            disconnect_event.set()
+            break
+        time.sleep(0.05)
+
+def tryConnectDeadCameras(captures, camera_buffers, stop_event, workers, fail_counts,
+                          connected, disconnect_events, SCREEN_WIDTH, SCREEN_HEIGHT):
+    for cam_id, url in CAMERAS.items():
+        if cam_id not in captures:  # only disconnected/not connected
+            disconnect_events[cam_id] = threading.Event()
+            if connectCamera(cam_id, url, captures, camera_buffers, stop_event, workers, fail_counts, disconnect_events):
+                connected.add(cam_id)
+    tile_windows(list(captures.keys()), SCREEN_WIDTH, SCREEN_HEIGHT)
+# def inputListener(stop_event, refresh_callback, refreshMsg):
+#     while not stop_event.is_set():
+#         if not msvcrt.kbhit():
+#             time.sleep(0.05)
+#             continue
+#         key = msvcrt.getwch().lower()
+#         if key != 'r':
+#             time.sleep(0.05)
+#         print(refreshMsg)
+#         refresh_callback()
+#         time.sleep(0.05)
 
 def main():
     detector, ocr, captures, camera_buffers, camera_last_frame_id, stop_event, SCREEN_WIDTH, SCREEN_HEIGHT = bootDependencies()
-    cap, worker, ACTIVE_WINDOW, camera_buffers, captures = bootCameras(camera_buffers, captures, SCREEN_WIDTH, SCREEN_HEIGHT, stop_event)
+    cap, worker, ACTIVE_WINDOW, camera_buffers, captures, workers, fail_counts, disconnect_events, connectedCameras = bootCameras(camera_buffers, captures, SCREEN_WIDTH, SCREEN_HEIGHT, stop_event)
 
     events = []
     plate_counter = 0
@@ -331,7 +386,7 @@ def main():
 
     cached_detections = {cam_id: [] for cam_id in captures}
     ocr_track_cache = {cam_id: [] for cam_id in captures}
-    # ocr_vote_cache = {cam_id: {} for cam_id in captures}
+    ocr_vote_cache = {cam_id: {} for cam_id in captures}
     camera_metrics = {
         cam_id: {
             "frames_read": 0,
@@ -344,9 +399,46 @@ def main():
         for cam_id in captures
     }
 
+    cv2.namedWindow("CONTROL", cv2.WINDOW_NORMAL)
+    cv2.moveWindow("CONTROL", 0, 0)
+
     try:
+        lastReconnectAttemptTS = time.time()
         while True:
-            for camera_id, cap in captures.items():
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                print("\nQ pressed. Stopping...")
+                break
+            if key == ord("r"):
+                print("R pressed: Attempting to reconnect dead cameras...")
+                tryConnectDeadCameras(captures, camera_buffers, stop_event, workers,
+                                      fail_counts, connectedCameras, disconnect_events, SCREEN_WIDTH, SCREEN_HEIGHT)
+                tile_windows(list(captures.keys()), SCREEN_WIDTH, SCREEN_HEIGHT)
+
+            now = time.time()
+            if ENABLE_CAMERA_RECONNECT and (now - lastReconnectAttemptTS) >= RECONNECT_INTERVAL_SECONDS:
+                tryConnectDeadCameras(captures, camera_buffers, stop_event, workers,
+                                      fail_counts, connectedCameras, disconnect_events, SCREEN_WIDTH, SCREEN_HEIGHT)
+                lastReconnectAttemptTS = now
+
+            dead_cameras = [cam_id for cam_id, evt in disconnect_events.items() if evt.is_set() and cam_id in captures]
+            for cam_id in dead_cameras:
+                disconnectCamera(cam_id, captures, workers)
+                camera_buffers.pop(cam_id, None)
+                camera_last_frame_id.pop(cam_id, None)
+                onFrameVsCamera.pop(cam_id, None)
+                per_camera_skip.pop(cam_id, None)
+                per_camera_cycle.pop(cam_id, None)
+                cached_detections.pop(cam_id, None)
+                ocr_track_cache.pop(cam_id, None)
+                ocr_vote_cache.pop(cam_id, None)
+                camera_metrics.pop(cam_id, None)
+
+            for camera_id in list(captures.keys()):
+                cap = captures.get(camera_id)
+                if cap is None:
+                    continue
+
                 buffer = camera_buffers[camera_id]
                 frame, frame_id = buffer.get()
                 if frame is None:
@@ -544,10 +636,6 @@ def main():
                 cv2.putText(frame, current_time, (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 cv2.imshow(camera_id, frame)
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                print("\nQ pressed. Stopping...")
-                break
     finally:
         stop_event.set()
         ocr_pool.stop()

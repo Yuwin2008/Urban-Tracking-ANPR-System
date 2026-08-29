@@ -31,4 +31,8 @@ isThisGpsServer = boolInput("Run the GPS server? (y/n): ")
 with ThreadPoolExecutor() as executor:
     if isThisGpsServer:
         executor.submit(startGPSServer)
+    os.environ["GPS_SERVER_HOST"] = "0.0.0.0"
+    os.environ["GPS_SERVER_PORT"] = "5000"
+    GPS_SERVER_IP = input("Enter the GPS server IP address: ")
+    os.environ["GPS_PUBLIC_BASE_URL"] = f"http://{GPS_SERVER_IP}:5000"
     executor.submit(startANPRCameras)

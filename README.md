@@ -4,7 +4,6 @@
 [![YOLO](https://img.shields.io/badge/YOLO-Ultralytics-111F68?logo=yolo&logoColor=white)](https://github.com/ultralytics/ultralytics)
 [![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![PaddleOCR](https://img.shields.io/badge/PaddleOCR-OCR-00A67E)](https://github.com/PaddlePaddle/PaddleOCR)
-[![EasyOCR](https://img.shields.io/badge/EasyOCR-OCR-FF6F00)](https://github.com/JaidedAI/EasyOCR)
 [![Flask](https://img.shields.io/badge/Flask-Backend-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![Folium](https://img.shields.io/badge/Folium-Maps-77B829)](https://python-visualization.github.io/folium/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)

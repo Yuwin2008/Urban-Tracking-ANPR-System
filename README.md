@@ -691,10 +691,10 @@ See [`LICENSE`](LICENSE) for details.
 
 #  Author
 
-[!Yuwin2008](https://github.com/Yuwin2008)
-[!Waqar Ahamad Khan]()
-[!Sairaj Dilip Vernekar](https://github.com/sdv-chess)
-[!Diya Prince](https://github.com/diya25prince-tech)
+# [!Yuwin2008](https://github.com/Yuwin2008)
+# [!Waqar Ahamad Khan]()
+# [!Sairaj Dilip Vernekar](https://github.com/sdv-chess)
+# [!Diya Prince](https://github.com/diya25prince-tech)
 
 Project:
 

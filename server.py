@@ -23,7 +23,7 @@ Run:
     python server.py
 
 Then open:
-    http://localhost:5001/Website/sihweb.html
+    http://localhost:5001/Website/index.html
 """
 
 import json
@@ -55,7 +55,7 @@ ocr = easyocr.Reader(["en"], gpu=False)
 print("Models loaded.\n")
 
 # static_url_path="" serves this whole folder at the site root, so
-# Website/sihweb4.html's "../camera_config.json" etc. resolve for free.
+# Website/index.html's "../camera_config.json" etc. resolve for free.
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
 CORS(app)
 
@@ -176,5 +176,5 @@ if __name__ == "__main__":
     print("ANPR server running")
     print("=" * 60)
     print("\nOpen the site at:")
-    print("  http://localhost:5001/Website/sihweb4.html\n")
+    print("  http://localhost:5001/Website/index.html\n")
     app.run(host="0.0.0.0", port=5001, debug=False)

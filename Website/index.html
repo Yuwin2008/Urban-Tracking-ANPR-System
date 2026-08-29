@@ -857,7 +857,7 @@ function useAnprResults() {
   return state;
 }
 
-function AnprModule() {
+function AnprModule({ pendingUpload, onPendingConsumed } = {}) {
   const theme = React.useContext(ThemeContext);
   const [selected, setSelected] = useState(null);
   const [stage, setStage] = useState(0);
@@ -909,6 +909,18 @@ function AnprModule() {
       setUploading(false);
     }
   }
+
+  // A live feed's "Scan now" button hands its captured frame off to this
+  // page (see App's sendFrameToAnpr) instead of uploading it itself — this
+  // runs that frame through the exact same handleFile() path as a manual
+  // drag-and-drop upload, so it goes through the real processing animation
+  // and lands in "Recent Real Detections" the same way.
+  useEffect(() => {
+    if (!pendingUpload) return;
+    handleFile(pendingUpload);
+    onPendingConsumed && onPendingConsumed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUpload]);
 
   return (
     <div className="space-y-6">
@@ -1064,7 +1076,7 @@ function AnprModule() {
    2B. IP WEBCAM — user-entered IP camera feed viewer
    ====================================================================== */
 
-function IPWebcamFeedCard({ feed, onRemove }) {
+function IPWebcamFeedCard({ feed, onRemove, onScanToAnpr }) {
   const theme = React.useContext(ThemeContext);
   // phase: "cors" (first attempt, requested CORS-enabled so pixels can be read for OCR)
   //     -> "plain" (fallback attempt without CORS, video still displays but frame capture may be blocked)
@@ -1154,7 +1166,9 @@ function IPWebcamFeedCard({ feed, onRemove }) {
     }
   }
 
-  // Auto-scan: capture + recognize a frame every 6s while enabled.
+  // Auto-scan: capture + recognize a frame every 6s while enabled. This stays
+  // local to the card (doesn't navigate away) — continuous scanning that
+  // jumped you to another page every 6s would be unusable.
   useEffect(() => {
     if (!autoScan || errored) return;
     scanNow();
@@ -1162,6 +1176,20 @@ function IPWebcamFeedCard({ feed, onRemove }) {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoScan, errored, feed.ip, feed.port, feed.path]);
+
+  // The "Scan now" button, in contrast, is a deliberate one-off action —
+  // capture the current frame and hand it to the ANPR/OCR Engine page
+  // (Module 01) to be uploaded and processed there, navigating you to it.
+  async function scanToOcrPage() {
+    if (errored) return;
+    setOcrError(null);
+    try {
+      const blob = await captureBlob();
+      onScanToAnpr && onScanToAnpr(blob, feed.label || feed.ip);
+    } catch (err) {
+      setOcrError(err.message || "Could not capture a frame from this feed.");
+    }
+  }
 
   const plateIsReal = lastResult && lastResult.plate !== "UNREADABLE" && lastResult.plate !== "NO PLATE DETECTED";
 
@@ -1231,9 +1259,9 @@ function IPWebcamFeedCard({ feed, onRemove }) {
             className={`flex items-center gap-1.5 rounded-md border px-2 py-1 font-data text-[10px] transition disabled:cursor-not-allowed disabled:opacity-40 ${autoScan ? `border-${theme.c500}/50 bg-${theme.c500}/10 text-${theme.c300}` : "border-slate-700 text-slate-400 hover:border-slate-500"}`}>
             <ScanLine size={12} /> Auto-scan {autoScan ? "ON" : "OFF"}
           </button>
-          <button onClick={scanNow} disabled={errored || scanning}
+          <button onClick={scanToOcrPage} disabled={errored} title="Send this frame to the ANPR / OCR Engine page"
             className="flex items-center gap-1.5 rounded-md border border-slate-700 px-2 py-1 font-data text-[10px] text-slate-300 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40">
-            {scanning ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />} Scan now
+            <Camera size={12} /> Scan now
           </button>
         </div>
 
@@ -1270,7 +1298,7 @@ function IPWebcamFeedCard({ feed, onRemove }) {
   );
 }
 
-function IPWebcamModule() {
+function IPWebcamModule({ onScanToAnpr }) {
   const theme = React.useContext(ThemeContext);
   const [feeds, setFeeds] = useState([]);
   const [ipInput, setIpInput] = useState("");
@@ -1381,7 +1409,7 @@ function IPWebcamModule() {
           Open the IP Webcam app on the phone, tap "Start server", and use the IP/port it shows under "IPv4" — this only works when the browser and the phone are on the same network.
         </p>
         <p className="mt-1 text-[11px] text-slate-500">
-          Each feed card has a <span className="text-slate-400">Scan now</span> button and an <span className="text-slate-400">Auto-scan</span> toggle that capture the current frame and send it to the same ANPR/OCR backend used in Module 01 (<span className="font-data">{API_BASE}/upload</span>) to detect and display the number plate. This requires <span className="font-data">server.py</span> to be running, and works best when the IP Webcam app's HTTP server allows cross-origin (CORS) access.
+          Each feed card has a <span className="text-slate-400">Scan now</span> button that captures the current frame and takes you straight to the <span className="text-slate-400">ANPR / OCR Engine</span> page, uploading it there for you to watch it process. The <span className="text-slate-400">Auto-scan</span> toggle instead scans in place every 6s using the same backend (<span className="font-data">{API_BASE}/upload</span>), for continuous monitoring without leaving this page. Both require <span className="font-data">server.py</span> to be running, and work best when the IP Webcam app's HTTP server allows cross-origin (CORS) access.
         </p>
       </GlassCard>
 
@@ -1393,7 +1421,7 @@ function IPWebcamModule() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {feeds.map((feed) => (
-            <IPWebcamFeedCard key={feed.id} feed={feed} onRemove={removeFeed} />
+            <IPWebcamFeedCard key={feed.id} feed={feed} onRemove={removeFeed} onScanToAnpr={onScanToAnpr} />
           ))}
         </div>
       )}
@@ -2287,6 +2315,17 @@ function App() {
 
   const goTo = (id) => { setSection(id); setMobileOpen(false); };
   const trackPlate = (plate) => { setTrajQuery(plate); goTo("trajectory"); };
+  const [pendingAnprFile, setPendingAnprFile] = useState(null);
+  // A live-feed "Scan now" hands its captured frame here: wrap it as a File
+  // (so it looks exactly like a drag-and-drop upload to AnprModule), stash
+  // it, and navigate to the ANPR/OCR Engine page, which picks it up and
+  // runs it through handleFile() on arrival.
+  const sendFrameToAnpr = (blob, label) => {
+    const safeLabel = (label || "live-scan").replace(/[^a-z0-9_-]+/gi, "_");
+    const file = new File([blob], `${safeLabel}_${Date.now()}.jpg`, { type: "image/jpeg" });
+    setPendingAnprFile(file);
+    goTo("anpr");
+  };
   const handleLogout = () => {
     sessionStorage.removeItem(AUTH_SESSION_KEY);
     setUser(null);
@@ -2522,8 +2561,10 @@ function App() {
           <main className="px-4 py-6 md:px-8 md:py-8">
             {section === "overview" && <Overview goTo={goTo} liveData={liveData} />}
             {section === "gps" && <GpsMapSection />}
-            {section === "anpr" && <AnprModule />}
-            {section === "ipcam" && <IPWebcamModule />}
+            {section === "anpr" && (
+              <AnprModule pendingUpload={pendingAnprFile} onPendingConsumed={() => setPendingAnprFile(null)} />
+            )}
+            {section === "ipcam" && <IPWebcamModule onScanToAnpr={sendFrameToAnpr} />}
             {section === "trajectory" && <TrajectoryTracking query={trajQuery} setQuery={setTrajQuery} liveData={liveData} />}
             {section === "analytics" && <TrafficAnalytics liveData={liveData} />}
             {section === "alerts" && <AlertSystem onTrack={trackPlate} />}

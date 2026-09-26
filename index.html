@@ -24,9 +24,9 @@
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
-  html, body { background:#020617; margin:0; padding:0; transition: background 0.25s ease; }
-  body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+  @import url('https://fonts.googleapis.com/css2?family=Mukta:wght@500;600;700;800&family=Noto+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+  html, body { background:#f4f6fa; margin:0; padding:0; transition: background 0.25s ease; }
+  body { font-family: 'Noto Sans', ui-sans-serif, system-ui, sans-serif; }
 </style>
 </head>
 <body>
@@ -445,28 +445,28 @@ function timeAgo(dateLike) {
    ====================================================================== */
 
 const THEMES = {
-  cyan: {
-    key: "cyan", label: "Cyan", dot: "bg-cyan-400",
-    c200: "cyan-200", c300: "cyan-300", c400: "cyan-400", c500: "cyan-500", c700: "cyan-700", c950: "cyan-950",
-    hex: "#22d3ee", rgb: "34,211,238",
+  navy: {
+    key: "navy", label: "Navy", dot: "bg-blue-700",
+    c200: "blue-800", c300: "blue-700", c400: "blue-700", c500: "blue-700", c700: "blue-900", c950: "blue-950",
+    hex: "#0b3d91", rgb: "11,61,145",
   },
-  amber: {
-    key: "amber", label: "Amber", dot: "bg-amber-400",
-    c200: "amber-200", c300: "amber-300", c400: "amber-400", c500: "amber-500", c700: "amber-700", c950: "amber-950",
-    hex: "#fbbf24", rgb: "251,191,36",
+  saffron: {
+    key: "saffron", label: "Saffron", dot: "bg-orange-400",
+    c200: "orange-800", c300: "orange-700", c400: "orange-700", c500: "orange-600", c700: "orange-800", c950: "orange-950",
+    hex: "#c2410c", rgb: "194,65,12",
   },
-  violet: {
-    key: "violet", label: "Violet", dot: "bg-violet-400",
-    c200: "violet-200", c300: "violet-300", c400: "violet-400", c500: "violet-500", c700: "violet-700", c950: "violet-950",
-    hex: "#a78bfa", rgb: "167,139,250",
+  green: {
+    key: "green", label: "Green", dot: "bg-emerald-600",
+    c200: "emerald-800", c300: "emerald-700", c400: "emerald-700", c500: "emerald-600", c700: "emerald-800", c950: "emerald-950",
+    hex: "#047857", rgb: "4,120,87",
   },
-  sunset: {
-    key: "sunset", label: "Sunset", dot: "bg-orange-400",
-    c200: "orange-200", c300: "orange-300", c400: "orange-400", c500: "orange-500", c700: "orange-700", c950: "orange-950",
-    hex: "#d97757", rgb: "217,119,87",
+  maroon: {
+    key: "maroon", label: "Maroon", dot: "bg-rose-700",
+    c200: "rose-800", c300: "rose-700", c400: "rose-700", c500: "rose-700", c700: "rose-900", c950: "rose-950",
+    hex: "#9f1239", rgb: "159,18,57",
   },
 };
-const ThemeContext = React.createContext(THEMES.cyan);
+const ThemeContext = React.createContext(THEMES.navy);
 
 /* ======================================================================
    SMALL UI PRIMITIVES
@@ -773,7 +773,7 @@ function Overview({ goTo, liveData }) {
             traffic intelligence and instant alerts.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <button onClick={() => goTo("trajectory")} className={`flex items-center gap-2 rounded-lg bg-${theme.c500} px-4 py-2.5 font-medium text-slate-950 transition hover:bg-${theme.c400}`}>
+            <button onClick={() => goTo("trajectory")} className={`flex items-center gap-2 rounded-lg bg-${theme.c500} px-4 py-2.5 font-medium text-white transition hover:bg-${theme.c400}`}>
               Track a Vehicle <ArrowRight size={16} />
             </button>
             <button onClick={() => goTo("analytics")} className={`flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-2.5 font-medium text-slate-200 transition hover:border-${theme.c500}/50`}>
@@ -1012,7 +1012,7 @@ function AnprModule({ pendingUpload, onPendingConsumed } = {}) {
                   {["-top-1 -left-1", "-top-1 -right-1", "-bottom-1 -left-1", "-bottom-1 -right-1"].map((pos, i) => (
                     <div key={i} className={`absolute ${pos} h-2.5 w-2.5 border-${theme.c300}`} />
                   ))}
-                  <div className={`absolute -top-5 left-0 rounded bg-${theme.c500} px-1.5 py-0.5 font-data text-[9px] font-bold text-slate-950`}>PLATE</div>
+                  <div className={`absolute -top-5 left-0 rounded bg-${theme.c500} px-1.5 py-0.5 font-data text-[9px] font-bold text-white`}>PLATE</div>
                 </div>
               )}
               <div className="absolute right-3 top-3 rounded bg-slate-950/70 px-2 py-1 font-data text-[9px] text-slate-300">{selected.id.toUpperCase()} · 1920×1080</div>
@@ -1400,7 +1400,7 @@ function IPWebcamModule({ onScanToAnpr }) {
             />
           </div>
           <button type="submit"
-            className={`flex items-center justify-center gap-2 rounded-lg bg-${theme.c500} px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-${theme.c400}`}>
+            className={`flex items-center justify-center gap-2 rounded-lg bg-${theme.c500} px-4 py-2.5 text-sm font-medium text-white transition hover:bg-${theme.c400}`}>
             <Camera size={16} /> Add feed
           </button>
         </form>
@@ -1997,24 +1997,22 @@ function AuthScreen({ onAuthenticated }) {
     <div className="auth-shell">
       <style>{`
         .auth-shell{
-          --asphalt:#000000;
-          --asphalt-2:#0A0A0C;
-          --panel:#131519;
-          --line: rgba(241,238,230,0.08);
-          --ivory:#F1EEE6;
-          --steel:#8992A3;
-          --plate-yellow:#F4C430;
-          --plate-yellow-dim:#D9AE1E;
-          --plate-yellow-glow: rgba(244,196,48,0.55);
-          --taillight:#E5484D;
-          --taillight-glow: rgba(229,72,77,0.5);
-          --signal:#3FB68B;
+          --navy:#0b3d91;
+          --navy-deep:#072a63;
+          --paper:#ffffff;
+          --paper-2:#f4f6fa;
+          --line: rgba(16,27,51,0.12);
+          --ink:#101b33;
+          --muted:#5b6b85;
+          --saffron:#ffb366;
+          --danger:#be123c;
+          --success:#047857;
           box-sizing:border-box;
           min-height:100vh;
           width:100%;
-          background:var(--asphalt);
-          color:var(--ivory);
-          font-family:'Inter',ui-sans-serif,sans-serif;
+          background:var(--paper-2);
+          color:var(--ink);
+          font-family:'Noto Sans',ui-sans-serif,sans-serif;
           display:flex;
           align-items:stretch;
           justify-content:center;
@@ -2023,115 +2021,107 @@ function AuthScreen({ onAuthenticated }) {
         .auth-shell .stage{ width:100%; max-width:1180px; display:flex; min-height:100vh; }
         .auth-shell .road{
           position:relative; flex:1.05;
-          background: linear-gradient(180deg, var(--asphalt-2) 0%, var(--asphalt) 100%);
+          background: linear-gradient(160deg, var(--navy) 0%, var(--navy-deep) 100%);
           overflow:hidden; display:flex; flex-direction:column; justify-content:space-between;
-          padding:56px 52px; border-right:1px solid var(--line);
+          padding:56px 52px;
         }
         .auth-shell .lane{
-          position:absolute; top:0; bottom:0; left:50%; width:10px; margin-left:-5px;
-          background-image: repeating-linear-gradient(to bottom, var(--plate-yellow) 0 46px, transparent 46px 92px);
-          opacity:0.85; animation: authDrive 1.6s linear infinite;
+          position:absolute; top:0; bottom:0; right:0; width:5px;
+          background-image: linear-gradient(to bottom, #FF9933 0 33%, #ffffff 33% 66%, #128807 66% 100%);
+          opacity:0.9;
         }
-        @keyframes authDrive{ from{ background-position-y: 0; } to{ background-position-y: 92px; } }
-        .auth-shell .road-mask{ position:absolute; inset:0; background: radial-gradient(120% 90% at 50% 0%, transparent 40%, var(--asphalt) 92%); }
+        .auth-shell .road-mask{ position:absolute; inset:0; background: radial-gradient(120% 60% at 15% 0%, rgba(255,255,255,0.10), transparent 55%); }
         .auth-shell .brand{ position:relative; z-index:2; display:flex; align-items:center; gap:12px; }
         .auth-shell .brand-mark{
-          width:38px;height:38px;border-radius:9px; background:var(--plate-yellow);
+          width:38px;height:38px;border-radius:9px; background:var(--paper);
           display:flex;align-items:center;justify-content:center;
-          font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--asphalt); font-size:19px;
+          font-family:'Mukta',sans-serif;font-weight:700;color:var(--navy); font-size:19px;
+          border:1px solid rgba(255,255,255,0.5);
         }
-        .auth-shell .brand-name{ font-family:'Rajdhani',sans-serif; font-weight:600; font-size:20px; letter-spacing:0.5px; }
+        .auth-shell .brand-name{ font-family:'Mukta',sans-serif; font-weight:600; font-size:20px; letter-spacing:0.3px; color:#ffffff; }
         .auth-shell .hero{ position:relative; z-index:2; max-width:420px; }
         .auth-shell .hero-eyebrow{
           font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:2px;
-          color:var(--plate-yellow); text-transform:uppercase; margin-bottom:14px;
+          color:var(--saffron); text-transform:uppercase; margin-bottom:14px;
         }
-        .auth-shell .hero h1{ font-family:'Rajdhani',sans-serif; font-weight:700; font-size:44px; line-height:1.05; margin:0 0 16px; letter-spacing:0.3px; }
-        .auth-shell .hero p{ color:var(--steel); font-size:15px; line-height:1.6; margin:0; }
+        .auth-shell .hero h1{ font-family:'Mukta',sans-serif; font-weight:700; font-size:44px; line-height:1.15; margin:0 0 16px; letter-spacing:0.1px; color:#ffffff; }
+        .auth-shell .hero p{ color:rgba(255,255,255,0.78); font-size:15px; line-height:1.6; margin:0; }
         .auth-shell .stat-row{ position:relative; z-index:2; display:flex; gap:28px; font-family:'JetBrains Mono',monospace; }
-        .auth-shell .stat b{ display:block; font-size:22px; color:var(--ivory); }
-        .auth-shell .stat span{ font-size:11px; color:var(--steel); letter-spacing:1px; text-transform:uppercase; }
-        .auth-shell .panel-wrap{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px 32px; background:var(--asphalt); }
-        .auth-shell .card{ width:100%; max-width:400px; }
-        .auth-shell .tabs{ display:flex; background:var(--panel); border-radius:12px; padding:4px; margin-bottom:28px; border:1px solid var(--line); }
+        .auth-shell .stat b{ display:block; font-size:22px; color:#ffffff; }
+        .auth-shell .stat span{ font-size:11px; color:rgba(255,255,255,0.65); letter-spacing:1px; text-transform:uppercase; }
+        .auth-shell .panel-wrap{ flex:1; display:flex; align-items:center; justify-content:center; padding:40px 32px; background:var(--paper-2); }
+        .auth-shell .card{ width:100%; max-width:400px; background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:32px 30px; box-shadow:0 16px 40px -20px rgba(16,27,51,0.25); }
+        .auth-shell .tabs{ display:flex; background:var(--paper-2); border-radius:12px; padding:4px; margin-bottom:28px; border:1px solid var(--line); }
         .auth-shell .tab-btn{
-          flex:1; padding:11px 0; border:none; background:transparent; color:var(--steel);
-          font-family:'Rajdhani',sans-serif; font-weight:600; font-size:15px; letter-spacing:0.4px;
-          border-radius:9px; cursor:pointer; transform:translateY(0) translateZ(0);
-          transition:background .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease;
+          flex:1; padding:11px 0; border:none; background:transparent; color:var(--muted);
+          font-family:'Mukta',sans-serif; font-weight:600; font-size:15px; letter-spacing:0.2px;
+          border-radius:9px; cursor:pointer;
+          transition:background .18s ease, color .18s ease, box-shadow .18s ease;
         }
         .auth-shell .tab-btn.active{
-          background:var(--plate-yellow); color:var(--asphalt); transform:translateY(-2px);
-          box-shadow:0 6px 16px var(--plate-yellow-glow), 0 3px 0 var(--plate-yellow-dim);
+          background:var(--navy); color:#ffffff;
+          box-shadow:0 4px 12px rgba(11,61,145,0.28);
         }
-        .auth-shell .tab-btn:not(.active):hover{ color:var(--ivory); transform:translateY(-1px); }
-        .auth-shell .tab-btn:active{ transform:translateY(1px); }
-        .auth-shell h2.form-title{ font-family:'Rajdhani',sans-serif; font-size:26px; font-weight:700; margin:0 0 6px; }
-        .auth-shell .form-sub{ color:var(--steel); font-size:13.5px; margin:0 0 26px; }
+        .auth-shell .tab-btn:not(.active):hover{ color:var(--ink); }
+        .auth-shell h2.form-title{ font-family:'Mukta',sans-serif; font-size:26px; font-weight:700; margin:0 0 6px; color:var(--ink); }
+        .auth-shell .form-sub{ color:var(--muted); font-size:13.5px; margin:0 0 26px; }
         .auth-shell .field{ margin-bottom:18px; position:relative; }
         .auth-shell .field label{
           display:block; font-size:12px; font-weight:600; letter-spacing:0.6px; text-transform:uppercase;
-          color:var(--steel); margin-bottom:7px;
+          color:var(--muted); margin-bottom:7px;
         }
         .auth-shell .field input{
-          width:100%; background:var(--panel); border:1px solid var(--line); border-radius:10px;
-          padding:13px 14px; color:var(--ivory); font-family:'Inter',sans-serif; font-size:14.5px;
+          width:100%; background:var(--paper); border:1px solid var(--line); border-radius:10px;
+          padding:13px 14px; color:var(--ink); font-family:'Noto Sans',sans-serif; font-size:14.5px;
           outline:none; transition:border-color .15s ease, box-shadow .15s ease;
         }
-        .auth-shell .field input::placeholder{ color:#5B6272; }
-        .auth-shell .field input:focus{ border-color:var(--plate-yellow); box-shadow:0 0 0 3px rgba(244,196,48,0.15); }
-        .auth-shell .field input.err{ border-color:var(--taillight); }
+        .auth-shell .field input::placeholder{ color:#9aa5b8; }
+        .auth-shell .field input:focus{ border-color:var(--navy); box-shadow:0 0 0 3px rgba(11,61,145,0.15); }
+        .auth-shell .field input.err{ border-color:var(--danger); }
         .auth-shell .pw-field{ position:relative; }
         .auth-shell .pw-toggle{
-          position:absolute; right:10px; top:37px; background:none; border:none; color:var(--steel);
-          font-family:'Inter',sans-serif; font-size:12px; font-weight:600; cursor:pointer; padding:6px 8px;
-          transition:color .15s ease, text-shadow .15s ease;
+          position:absolute; right:10px; top:37px; background:none; border:none; color:var(--muted);
+          font-family:'Noto Sans',sans-serif; font-size:12px; font-weight:600; cursor:pointer; padding:6px 8px;
+          transition:color .15s ease;
         }
-        .auth-shell .pw-toggle:hover{ color:var(--plate-yellow); text-shadow:0 0 10px var(--plate-yellow-glow); }
+        .auth-shell .pw-toggle:hover{ color:var(--navy); }
         .auth-shell .plate-field input{
           font-family:'JetBrains Mono',monospace; font-weight:700; letter-spacing:3px; font-size:17px;
-          text-transform:uppercase; color:var(--asphalt); background:var(--plate-yellow);
-          border:2px solid var(--plate-yellow-dim); text-align:center; padding:14px 10px 12px;
+          text-transform:uppercase; color:#0b0f19; background:#ffffff;
+          border:2px solid #0b0f19; text-align:center; padding:14px 10px 12px; border-radius:6px;
         }
-        .auth-shell .plate-field input::placeholder{ color:rgba(20,22,27,0.45); letter-spacing:2px; }
-        .auth-shell .plate-field input:focus{ box-shadow:0 0 0 3px rgba(244,196,48,0.3); border-color:var(--asphalt); }
+        .auth-shell .plate-field input::placeholder{ color:rgba(11,15,25,0.35); letter-spacing:2px; }
+        .auth-shell .plate-field input:focus{ box-shadow:0 0 0 3px rgba(11,61,145,0.25); border-color:var(--navy); }
         .auth-shell .plate-field{ position:relative; }
-        .auth-shell .plate-bolt{ position:absolute; width:5px;height:5px;border-radius:50%; background:rgba(20,22,27,0.5); top:44px; }
+        .auth-shell .plate-bolt{ position:absolute; width:5px;height:5px;border-radius:50%; background:rgba(11,15,25,0.55); top:44px; }
         .auth-shell .plate-bolt.l{ left:10px; }
         .auth-shell .plate-bolt.r{ right:10px; }
-        .auth-shell .hint{ font-size:11.5px; color:var(--steel); margin-top:6px; }
-        .auth-shell .hint.err{ color:var(--taillight); }
+        .auth-shell .hint{ font-size:11.5px; color:var(--muted); margin-top:6px; }
+        .auth-shell .hint.err{ color:var(--danger); }
         .auth-shell .submit-btn{
           position:relative; width:100%; padding:15px 0; border:none; border-radius:10px;
-          background:linear-gradient(180deg, #FFDE6E 0%, var(--plate-yellow) 55%, var(--plate-yellow-dim) 100%);
-          color:var(--asphalt); font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16px;
-          letter-spacing:0.5px; cursor:pointer; margin-top:6px;
-          transform:perspective(600px) translateY(0) rotateX(0deg) translateZ(0);
-          box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 8px 18px var(--plate-yellow-glow);
+          background:linear-gradient(180deg, #14479f 0%, var(--navy) 60%, var(--navy-deep) 100%);
+          color:#ffffff; font-family:'Mukta',sans-serif; font-weight:700; font-size:16px;
+          letter-spacing:0.3px; cursor:pointer; margin-top:6px;
+          box-shadow: 0 4px 12px rgba(11,61,145,0.35);
           transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
-          animation: authBtnGlow 2.6s ease-in-out infinite;
         }
-        .auth-shell .submit-btn:hover{ transform:perspective(600px) translateY(-4px) rotateX(4deg); box-shadow: 0 9px 0 var(--plate-yellow-dim), 0 22px 34px var(--plate-yellow-glow); }
-        .auth-shell .submit-btn:active{ transform:perspective(600px) translateY(2px) rotateX(0deg); box-shadow: 0 2px 0 var(--plate-yellow-dim), 0 6px 12px var(--plate-yellow-glow); animation-play-state: paused; }
-        @keyframes authBtnGlow{ 0%, 100%{ box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 8px 18px var(--plate-yellow-glow); } 50%{ box-shadow: 0 5px 0 var(--plate-yellow-dim), 0 12px 30px rgba(244,196,48,0.85); } }
-        .auth-shell .switch-line{ text-align:center; margin-top:20px; font-size:13.5px; color:var(--steel); }
-        .auth-shell .switch-line button{ background:none; border:none; color:var(--plate-yellow); font-weight:600; cursor:pointer; font-size:13.5px; padding:0; }
+        .auth-shell .submit-btn:hover{ transform:translateY(-2px); box-shadow: 0 10px 22px rgba(11,61,145,0.4); }
+        .auth-shell .submit-btn:active{ transform:translateY(0); box-shadow: 0 4px 10px rgba(11,61,145,0.3); }
+        .auth-shell .switch-line{ text-align:center; margin-top:20px; font-size:13.5px; color:var(--muted); }
+        .auth-shell .switch-line button{ background:none; border:none; color:var(--navy); font-weight:600; cursor:pointer; font-size:13.5px; padding:0; }
         .auth-shell .switch-line button:hover{ text-decoration:underline; }
         .auth-shell .toast{ display:flex; align-items:center; gap:8px; padding:11px 14px; border-radius:9px; font-size:13px; margin-bottom:18px; border:1px solid transparent; }
-        .auth-shell .toast.error{ background:rgba(229,72,77,0.12); border-color:rgba(229,72,77,0.4); color:#FF9A9D; }
-        .auth-shell .toast.success{ background:rgba(63,182,139,0.12); border-color:rgba(63,182,139,0.4); color:#7CE0BB; }
-        .auth-shell button:focus-visible, .auth-shell input:focus-visible{ outline:2px solid var(--plate-yellow); outline-offset:2px; }
+        .auth-shell .toast.error{ background:rgba(190,18,60,0.08); border-color:rgba(190,18,60,0.35); color:var(--danger); }
+        .auth-shell .toast.success{ background:rgba(4,120,87,0.08); border-color:rgba(4,120,87,0.35); color:var(--success); }
+        .auth-shell button:focus-visible, .auth-shell input:focus-visible{ outline:2px solid var(--navy); outline-offset:2px; }
         @media (max-width:900px){
           .auth-shell .stage{ flex-direction:column; min-height:auto; }
-          .auth-shell .road{ padding:36px 28px; border-right:none; border-bottom:1px solid var(--line); min-height:260px; }
+          .auth-shell .road{ padding:36px 28px; min-height:260px; }
           .auth-shell .hero h1{ font-size:32px; }
           .auth-shell .stat-row{ margin-top:24px; }
           .auth-shell .lane{ display:none; }
           .auth-shell .panel-wrap{ padding:32px 24px 56px; }
-        }
-        @media (prefers-reduced-motion: reduce){
-          .auth-shell .lane{ animation:none; }
-          .auth-shell .submit-btn{ animation:none; }
         }
       `}</style>
 
@@ -2300,9 +2290,9 @@ function ModeToggle({ mode, setMode, compact = false }) {
 }
 
 function App() {
-  const [themeName, setThemeName] = useState("cyan");
+  const [themeName, setThemeName] = useState("navy");
   const theme = THEMES[themeName];
-  const [mode, setMode] = useState("dark");
+  const [mode, setMode] = useState("light");
   const isLight = mode === "light";
   const [section, setSection] = useState("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -2334,7 +2324,7 @@ function App() {
   };
 
   useEffect(() => {
-    document.body.style.background = isLight ? "#f6f1e7" : "#020617";
+    document.body.style.background = isLight ? "#f4f6fa" : "#020617";
   }, [isLight]);
 
   // Not signed in yet — show the login/register screen instead of the dashboard.
@@ -2344,11 +2334,11 @@ function App() {
 
   return (
     <ThemeContext.Provider value={theme}>
-    <div className={`anpr-root min-h-screen text-slate-200 ${isLight ? "light bg-[#f6f1e7]" : "bg-slate-950"}`}>
+    <div className={`anpr-root min-h-screen text-slate-200 ${isLight ? "light bg-[#f4f6fa]" : "bg-slate-950"}`}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
-        .anpr-root { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-        .font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Mukta:wght@500;600;700;800&family=Noto+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        .anpr-root { font-family: 'Noto Sans', ui-sans-serif, system-ui, sans-serif; }
+        .font-display { font-family: 'Mukta', 'Noto Sans', sans-serif; }
         .font-data { font-family: 'JetBrains Mono', ui-monospace, monospace; }
         .anpr-root ::-webkit-scrollbar { width: 8px; height: 8px; }
         .anpr-root ::-webkit-scrollbar-track { background: transparent; }
@@ -2360,16 +2350,16 @@ function App() {
         }
 
         /* ==================================================================
-           LIGHT MODE — warm cream/paper theme, repaints the dark slate
-           utility classes used everywhere in the dashboard.
+           LIGHT MODE (default) — official portal theme: white/paper surfaces,
+           navy ink and a saffron-and-green undertone in the ambient wash.
+           Repaints the dark slate utility classes used everywhere below.
            ================================================================== */
-        .anpr-root.light { color: #2a251d; }
-        .anpr-root.light .font-display { font-family: 'Fraunces', 'Space Grotesk', serif; }
-        .anpr-root.light ::-webkit-scrollbar-thumb { background: #ddd3bd; }
+        .anpr-root.light { color: #101b33; }
+        .anpr-root.light ::-webkit-scrollbar-thumb { background: #cbd5e1; }
         .anpr-root.light .bg-scan {
           background-image:
-            radial-gradient(circle at 15% 10%, rgba(${theme.rgb},0.05), transparent 40%),
-            radial-gradient(circle at 85% 90%, rgba(217,119,87,0.06), transparent 40%);
+            radial-gradient(circle at 15% 10%, rgba(11,61,145,0.05), transparent 40%),
+            radial-gradient(circle at 85% 90%, rgba(19,136,8,0.05), transparent 40%);
         }
 
         /* surfaces, darkest -> lightest */
@@ -2378,23 +2368,27 @@ function App() {
         .anpr-root.light .bg-slate-950\\/50,
         .anpr-root.light .bg-slate-950\\/60,
         .anpr-root.light .bg-slate-950\\/70,
-        .anpr-root.light .bg-slate-950\\/80 { background-color: #fbf8f2 !important; }
+        .anpr-root.light .bg-slate-950\\/80 { background-color: #f4f6fa !important; }
 
         .anpr-root.light .bg-slate-900,
         .anpr-root.light .bg-slate-900\\/40,
         .anpr-root.light .bg-slate-900\\/60 { background-color: #ffffff !important; }
 
         .anpr-root.light .bg-slate-800,
-        .anpr-root.light .bg-slate-800\\/40 { background-color: #f1ebdd !important; }
+        .anpr-root.light .bg-slate-800\\/40,
+        .anpr-root.light .hover\\:bg-slate-800:hover { background-color: #eaeff5 !important; }
 
         .anpr-root.light .bg-slate-700,
-        .anpr-root.light .bg-slate-700\\/30 { background-color: #e9e1cd !important; }
+        .anpr-root.light .bg-slate-700\\/30 { background-color: #dbe3ee !important; }
 
-        .anpr-root.light .bg-slate-500 { background-color: #cabfa4 !important; }
+        .anpr-root.light .bg-slate-500 { background-color: #94a3b8 !important; }
+
+        .anpr-root.light .hover\\:bg-slate-900:hover,
+        .anpr-root.light .hover\\:bg-slate-900\\/40:hover { background-color: #eef2f7 !important; }
 
         .anpr-root.light .sample-thumb { background: #ffffff !important; }
         .anpr-root.light .sample-thumb > div:first-child { opacity: 0.5; }
-        .anpr-root.light .sample-thumb .bg-slate-950\\/70 { background-color: rgba(255,255,255,0.85) !important; color: #2a251d !important; }
+        .anpr-root.light .sample-thumb .bg-slate-950\\/70 { background-color: rgba(255,255,255,0.85) !important; color: #101b33 !important; }
 
         /* borders */
         .anpr-root.light .border-slate-800,
@@ -2402,21 +2396,38 @@ function App() {
         .anpr-root.light .border-slate-800\\/80,
         .anpr-root.light .border-slate-700,
         .anpr-root.light .border-slate-600,
-        .anpr-root.light .border-slate-600\\/40 { border-color: #e7ddc4 !important; }
+        .anpr-root.light .border-slate-600\\/40,
+        .anpr-root.light .hover\\:border-slate-700:hover,
+        .anpr-root.light .hover\\:border-slate-600:hover { border-color: #d7dee8 !important; }
+        .anpr-root.light .border-slate-500,
+        .anpr-root.light .hover\\:border-slate-500:hover { border-color: #94a3b8 !important; }
 
         /* text */
         .anpr-root.light .text-slate-50,
         .anpr-root.light .text-slate-100,
-        .anpr-root.light .text-slate-200 { color: #241f18 !important; }
-        .anpr-root.light .text-slate-300 { color: #47402f !important; }
-        .anpr-root.light .text-slate-400 { color: #756c56 !important; }
-        .anpr-root.light .text-slate-500 { color: #8a8069 !important; }
-        .anpr-root.light .text-slate-600 { color: #a29979 !important; }
+        .anpr-root.light .text-slate-200,
+        .anpr-root.light .hover\\:text-slate-100:hover,
+        .anpr-root.light .hover\\:text-slate-200:hover { color: #101b33 !important; }
+        .anpr-root.light .text-slate-300,
+        .anpr-root.light .hover\\:text-slate-300:hover { color: #33415c !important; }
+        .anpr-root.light .text-slate-400 { color: #5b6b85 !important; }
+        .anpr-root.light .text-slate-500 { color: #74839c !important; }
+        .anpr-root.light .text-slate-600 { color: #97a3b8 !important; }
 
-        .anpr-root.light .ring-offset-slate-950 { --tw-ring-offset-color: #fbf8f2 !important; }
-        .anpr-root.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e7ddc4 !important; }
+        /* status colors need a darker shade for AA contrast on a white page */
+        .anpr-root.light .text-emerald-300,
+        .anpr-root.light .text-emerald-400 { color: #047857 !important; }
+        .anpr-root.light .text-rose-200,
+        .anpr-root.light .text-rose-300,
+        .anpr-root.light .text-rose-400 { color: #be123c !important; }
+        .anpr-root.light .text-amber-300,
+        .anpr-root.light .text-amber-400 { color: #92400e !important; }
+        .anpr-root.light .text-blue-300 { color: #1d4ed8 !important; }
+
+        .anpr-root.light .ring-offset-slate-950 { --tw-ring-offset-color: #f4f6fa !important; }
+        .anpr-root.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) { border-color: #d7dee8 !important; }
         .anpr-root.light .shadow-2xl,
-        .anpr-root.light .shadow-xl { box-shadow: 0 8px 30px -12px rgba(120,105,70,0.18) !important; }
+        .anpr-root.light .shadow-xl { box-shadow: 0 8px 30px -12px rgba(16,27,51,0.14) !important; }
       `}</style>
 
       <div className="bg-scan flex min-h-screen">
